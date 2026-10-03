@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 :root{
   --folha:#1E6B43; --folha-esc:#123F28; --manga:#E39A2D; --pedra:#A6ADA8; --tomate:#C43E3E;
@@ -111,7 +110,9 @@ main{display:grid;grid-template-columns:1fr 390px;min-height:0}
 .toast{position:fixed;z-index:1200;left:50%;bottom:20px;transform:translateX(-50%) translateY(80px);background:var(--tinta);color:#fff;padding:10px 16px;border-radius:6px;font-weight:600;transition:transform .2s}
 .toast.on{transform:translateX(-50%) translateY(0)}
 
-.leaflet-tooltip{font-family:var(--f-corpo);font-weight:600}
+#svgMapa{display:block;width:100%;height:100%;touch-action:none;user-select:none;cursor:grab}
+#svgMapa:active{cursor:grabbing}
+#mapa{height:100%}
 
 @media (max-width:860px){
   .app{display:block;height:auto}
@@ -199,7 +200,6 @@ main{display:grid;grid-template-columns:1fr 390px;min-height:0}
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -217,8 +217,7 @@ const SEED = {"L1":{"num":1,"nome":"CAROLINA","codigo":"1","cnpj":"049720920002-
 
 /* se algum script externo for bloqueado, o app não pode morrer */
 const NOOP = new Proxy(function(){}, {get:(a,k)=> k===Symbol.toPrimitive ? (()=> '') : NOOP, apply:()=>NOOP});
-const semMapa = typeof L === 'undefined', semBanco = typeof firebase === 'undefined';
-if (semMapa) window.L = NOOP;
+const semBanco = typeof firebase === 'undefined';
 if (semBanco) window.firebase = NOOP;
 try { firebase.initializeApp(firebaseConfig); } catch(e) {}
 const auth = firebase.auth(), db = firebase.database();
@@ -236,48 +235,142 @@ const br = iso => iso ? iso.split('-').reverse().join('/') : '';
 const statusEf = l => (l.status === 'agendada' && l.dataAgendada && l.dataAgendada < hoje()) ? 'vencida' : (l.status || 'pendente');
 function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2600); }
 
-/* ---------- MAPA ---------- */
-const mapa = L.map('mapa', {zoomSnap:.5}).fitBounds(SP_BOUNDS);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO'
-}).addTo(mapa);
-fetch('https://servicodados.ibge.gov.br/api/v3/malhas/estados/35?formato=application/vnd.geo+json&qualidade=intermediaria')
-  .then(r => r.json())
-  .then(geo => { L.geoJSON(geo, {interactive:false, style:{color:'#123F28', weight:2.5, fill:true, fillColor:'#1E6B43', fillOpacity:.05}}).addTo(mapa); })
-  .catch(() => {});
-const marcadores = {};
+/* ---------- MAPA PRÓPRIO (SVG, sem dependência externa) ---------- */
+const SP_CONTORNO = [[-22.5028,-52.9985],[-22.553,-52.9443],[-22.553,-52.9262],[-22.5865,-52.872],[-22.5865,-52.8359],[-22.6032,-52.8178],[-22.5865,-52.7997],[-22.5865,-52.6913],[-22.5196,-52.619],[-22.5196,-52.4564],[-22.5865,-52.3842],[-22.6032,-52.3842],[-22.62,-52.3661],[-22.62,-52.2215],[-22.5698,-52.1673],[-22.553,-52.1673],[-22.4861,-52.0951],[-22.4861,-51.9866],[-22.553,-51.9144],[-22.553,-51.8963],[-22.5698,-51.8782],[-22.5698,-51.806],[-22.5865,-51.7879],[-22.5865,-51.7518],[-22.62,-51.7156],[-22.6367,-51.7156],[-22.6367,-51.6976],[-22.6534,-51.6795],[-22.6534,-51.553],[-22.5865,-51.4807],[-22.5865,-51.4627],[-22.5698,-51.4446],[-22.5698,-51.3362],[-22.5865,-51.3181],[-22.6032,-51.3181],[-22.6534,-51.282],[-22.6534,-51.2639],[-22.6869,-51.2097],[-22.6869,-51.029],[-22.8038,-50.9025],[-22.8206,-50.9025],[-22.8373,-50.8845],[-22.854,-50.8845],[-22.854,-50.8664],[-22.8873,-50.8122],[-22.8873,-50.505],[-22.8206,-50.4328],[-22.8206,-50.2702],[-22.854,-50.2159],[-22.854,-50.1798],[-22.8706,-50.1617],[-22.8706,-50.1437],[-22.9708,-50.0353],[-22.9875,-50.0353],[-23.0042,-50.0172],[-23.0208,-50.0172],[-23.0709,-49.9811],[-23.0709,-49.9088],[-23.0875,-49.8907],[-23.0875,-49.8365],[-23.1209,-49.7823],[-23.1209,-49.7462],[-23.1375,-49.7281],[-23.1375,-49.71],[-23.1875,-49.6739],[-23.2208,-49.6739],[-23.2375,-49.6558],[-23.2708,-49.6558],[-23.2874,-49.6378],[-23.4704,-49.6378],[-23.5036,-49.6739],[-23.5036,-49.692],[-23.5368,-49.7281],[-23.6033,-49.7281],[-23.6365,-49.692],[-23.6365,-49.6558],[-23.6863,-49.6016],[-23.7858,-49.6016],[-23.8024,-49.6197],[-23.8024,-49.6378],[-23.8355,-49.6739],[-23.8853,-49.6739],[-23.8853,-49.6558],[-23.9018,-49.6378],[-23.9018,-49.6197],[-24.0343,-49.4751],[-24.0343,-49.3487],[-24.0508,-49.3306],[-24.1336,-49.3306],[-24.1666,-49.3667],[-24.2162,-49.3667],[-24.2493,-49.3306],[-24.2493,-49.3125],[-24.2823,-49.2764],[-24.3979,-49.2764],[-24.4309,-49.3125],[-24.4309,-49.3306],[-24.4969,-49.3848],[-24.5463,-49.3848],[-24.5628,-49.4029],[-24.5793,-49.3848],[-24.5958,-49.3848],[-24.6616,-49.3125],[-24.6781,-49.3125],[-24.7275,-49.2583],[-24.7275,-49.0234],[-24.6946,-48.9873],[-24.6946,-48.9692],[-24.6616,-48.9331],[-24.6616,-48.915],[-24.6452,-48.897],[-24.6452,-48.6801],[-24.6616,-48.6621],[-24.6616,-48.6079],[-24.6781,-48.5898],[-24.7933,-48.5898],[-24.8427,-48.644],[-24.8427,-48.6621],[-24.8755,-48.7163],[-24.9084,-48.7163],[-24.9413,-48.6801],[-24.9577,-48.6801],[-25.007,-48.6259],[-25.007,-48.5537],[-24.9741,-48.4995],[-24.9741,-48.4452],[-24.9906,-48.4272],[-24.9906,-48.4091],[-25.0234,-48.373],[-25.1383,-48.373],[-25.1547,-48.3549],[-25.2039,-48.3549],[-25.2039,-48.3368],[-25.2203,-48.3188],[-25.2203,-48.2646],[-25.2531,-48.2284],[-25.2531,-48.2104],[-25.2203,-48.1742],[-25.2203,-48.1562],[-25.2039,-48.1381],[-25.1383,-48.1381],[-25.0891,-48.1923],[-25.0398,-48.1923],[-25.0234,-48.1742],[-25.007,-48.1742],[-24.9413,-48.1019],[-24.9413,-48.0839],[-24.9084,-48.0477],[-24.9084,-48.0297],[-24.892,-48.0116],[-24.892,-47.9574],[-24.8755,-47.9393],[-24.8755,-47.9213],[-24.8591,-47.9213],[-24.8427,-47.9032],[-24.8262,-47.9032],[-24.8098,-47.8851],[-24.7933,-47.8851],[-24.7604,-47.849],[-24.7604,-47.8309],[-24.7275,-47.7948],[-24.7275,-47.7586],[-24.711,-47.7406],[-24.711,-47.6683],[-24.6946,-47.6502],[-24.6946,-47.4876],[-24.6781,-47.4696],[-24.6781,-47.4515],[-24.6452,-47.3973],[-24.6452,-47.3792],[-24.6122,-47.325],[-24.6122,-47.3069],[-24.5958,-47.3069],[-24.5628,-47.2708],[-24.5463,-47.2708],[-24.5298,-47.2527],[-24.5133,-47.2527],[-24.4309,-47.1624],[-24.4309,-47.1443],[-24.3979,-47.1082],[-24.3979,-47.0901],[-24.3649,-47.054],[-24.3649,-47.0359],[-24.3484,-47.0178],[-24.3484,-46.9998],[-24.2988,-46.9456],[-24.2988,-46.9275],[-24.2823,-46.9094],[-24.2658,-46.9094],[-24.2493,-46.8914],[-24.2327,-46.8914],[-24.2162,-46.8733],[-24.1997,-46.8733],[-24.1832,-46.8552],[-24.1666,-46.8552],[-24.117,-46.8191],[-24.117,-46.801],[-24.1005,-46.783],[-24.1005,-46.7468],[-24.0839,-46.7288],[-24.0839,-46.7107],[-24.0674,-46.6926],[-24.0674,-46.6745],[-24.0343,-46.6384],[-24.0343,-46.6203],[-24.0012,-46.5842],[-24.0012,-46.5661],[-23.9681,-46.53],[-23.9681,-46.3312],[-23.9515,-46.3132],[-23.9515,-46.2951],[-23.935,-46.277],[-23.935,-46.259],[-23.9184,-46.2409],[-23.9184,-46.2048],[-23.9018,-46.1867],[-23.9018,-46.0422],[-23.8853,-46.0241],[-23.8853,-45.9337],[-23.8687,-45.9157],[-23.8687,-45.7711],[-23.9018,-45.7169],[-23.9018,-45.6989],[-23.9515,-45.6447],[-23.9515,-45.6266],[-23.9681,-45.6085],[-23.9681,-45.5724],[-23.9846,-45.5543],[-24.0012,-45.5543],[-24.0508,-45.5182],[-24.0508,-45.5001],[-24.0674,-45.482],[-24.0674,-45.3736],[-24.0508,-45.3736],[-24.0177,-45.3375],[-24.0012,-45.3375],[-23.9846,-45.3194],[-23.9681,-45.3194],[-23.9515,-45.3375],[-23.935,-45.3375],[-23.9184,-45.3556],[-23.9018,-45.3556],[-23.8687,-45.4098],[-23.8687,-45.5182],[-23.8521,-45.5362],[-23.8521,-45.5543],[-23.8024,-45.6085],[-23.7692,-45.6085],[-23.7029,-45.5362],[-23.7029,-45.5001],[-23.6863,-45.482],[-23.6863,-45.3014],[-23.6697,-45.2833],[-23.6697,-45.2652],[-23.6531,-45.2471],[-23.6531,-45.2291],[-23.6033,-45.1749],[-23.6033,-45.1568],[-23.5701,-45.1207],[-23.5701,-45.1026],[-23.5368,-45.0484],[-23.5368,-44.8677],[-23.5202,-44.8496],[-23.5202,-44.8316],[-23.5036,-44.8135],[-23.4538,-44.8135],[-23.4371,-44.8316],[-23.4205,-44.8316],[-23.4039,-44.8496],[-23.3872,-44.8496],[-23.3373,-44.8858],[-23.2874,-44.8858],[-23.2708,-44.9038],[-23.2208,-44.9038],[-23.2042,-44.8858],[-23.1542,-44.8858],[-23.0542,-44.7774],[-23.0542,-44.7593],[-23.0375,-44.7412],[-23.0375,-44.7051],[-23.0208,-44.687],[-23.0208,-44.5967],[-23.0042,-44.5786],[-23.0042,-44.4883],[-22.9708,-44.4341],[-22.9708,-44.3979],[-22.9541,-44.3799],[-22.9541,-44.3437],[-22.9207,-44.3076],[-22.904,-44.3076],[-22.8706,-44.2715],[-22.6869,-44.2715],[-22.6701,-44.2895],[-22.6701,-44.3076],[-22.6534,-44.3257],[-22.6534,-44.3799],[-22.6701,-44.3979],[-22.6701,-44.416],[-22.6869,-44.416],[-22.7203,-44.4521],[-22.7704,-44.4521],[-22.7871,-44.4702],[-22.7871,-44.6328],[-22.7036,-44.7232],[-22.7036,-44.7412],[-22.6869,-44.7593],[-22.6032,-44.7593],[-22.5865,-44.7774],[-22.5865,-44.8496],[-22.6367,-44.9038],[-22.6367,-45.0123],[-22.6534,-45.0303],[-22.6534,-45.1207],[-22.6701,-45.1387],[-22.6701,-45.1929],[-22.7036,-45.2471],[-22.7036,-45.2652],[-22.737,-45.3014],[-22.737,-45.5362],[-22.7537,-45.5543],[-22.7537,-45.7169],[-22.8038,-45.7711],[-22.8206,-45.7711],[-22.854,-45.8073],[-22.8873,-45.8073],[-22.904,-45.8253],[-22.904,-45.8976],[-22.8706,-45.9518],[-22.8706,-45.9699],[-22.854,-45.988],[-22.854,-46.0241],[-22.8373,-46.0422],[-22.8373,-46.0783],[-22.854,-46.0964],[-22.854,-46.1325],[-22.8706,-46.1506],[-22.8706,-46.1686],[-22.904,-46.2048],[-22.9207,-46.2048],[-22.9374,-46.2228],[-22.9374,-46.3312],[-22.904,-46.3674],[-22.8873,-46.3674],[-22.8373,-46.4035],[-22.7704,-46.4035],[-22.7537,-46.4216],[-22.7036,-46.4216],[-22.6869,-46.4397],[-22.6534,-46.4397],[-22.6367,-46.4577],[-22.62,-46.4577],[-22.5196,-46.5661],[-22.5196,-46.6023],[-22.5028,-46.6203],[-22.5028,-46.6384],[-22.4526,-46.6926],[-22.4191,-46.6926],[-22.4024,-46.7107],[-22.3521,-46.7107],[-22.3353,-46.6926],[-22.3186,-46.6926],[-22.3018,-46.6745],[-22.285,-46.6745],[-22.2515,-46.6384],[-21.9493,-46.6384],[-21.7979,-46.53],[-21.7138,-46.53],[-21.6464,-46.4577],[-21.6127,-46.4577],[-21.5959,-46.4397],[-21.5285,-46.4397],[-21.461,-46.5119],[-21.461,-46.53],[-21.4442,-46.5481],[-21.4442,-46.6023],[-21.4273,-46.6203],[-21.4273,-46.6565],[-21.4104,-46.6745],[-21.4104,-46.7107],[-21.4273,-46.7288],[-21.4273,-46.801],[-21.461,-46.8552],[-21.461,-46.8733],[-21.4779,-46.8733],[-21.5116,-46.9094],[-21.5116,-46.9456],[-21.4779,-46.9817],[-21.4273,-46.9817],[-21.4104,-46.9998],[-21.2585,-46.9998],[-21.2416,-47.0178],[-21.2247,-47.0178],[-21.1741,-47.0721],[-21.1572,-47.0721],[-21.0895,-47.1443],[-21.005,-47.1443],[-20.9881,-47.1624],[-20.9204,-47.1624],[-20.8865,-47.1985],[-20.8357,-47.1985],[-20.7849,-47.1443],[-20.7849,-47.1263],[-20.768,-47.1082],[-20.768,-47.0901],[-20.751,-47.0721],[-20.751,-47.054],[-20.7171,-47.0178],[-20.6663,-47.0178],[-20.6493,-47.0359],[-20.6323,-47.0359],[-20.5815,-47.0901],[-20.5815,-47.1805],[-20.5475,-47.2166],[-20.4796,-47.2166],[-20.4627,-47.1985],[-20.4627,-47.1624],[-20.4457,-47.1443],[-20.4457,-47.1082],[-20.3947,-47.1082],[-20.3778,-47.0901],[-20.2758,-47.0901],[-20.2248,-47.1443],[-20.2248,-47.1624],[-20.1738,-47.2166],[-20.1738,-47.2347],[-20.1227,-47.2889],[-20.0887,-47.2889],[-20.0717,-47.3069],[-20.0206,-47.3069],[-20.0036,-47.325],[-19.9695,-47.325],[-19.9695,-47.3431],[-19.9525,-47.3611],[-19.9525,-47.4515],[-19.9866,-47.4876],[-19.9866,-47.5057],[-20.0206,-47.5057],[-20.0376,-47.5238],[-20.0547,-47.5238],[-20.0887,-47.5599],[-20.0887,-47.6141],[-20.0206,-47.6864],[-20.0206,-47.7767],[-20.0376,-47.7948],[-20.0376,-47.8309],[-20.0547,-47.8309],[-20.0717,-47.849],[-20.0887,-47.849],[-20.1057,-47.8671],[-20.1057,-47.8851],[-20.1398,-47.9213],[-20.1398,-47.9755],[-20.1227,-47.9935],[-20.1227,-48.0297],[-20.0887,-48.0658],[-20.0717,-48.0658],[-20.0717,-48.2284],[-20.0887,-48.2465],[-20.0887,-48.2826],[-20.1398,-48.3368],[-20.1398,-48.373],[-20.1568,-48.391],[-20.1568,-48.6801],[-20.1908,-48.7163],[-20.1908,-48.7343],[-20.2248,-48.7705],[-20.2928,-48.7705],[-20.3098,-48.7885],[-20.3778,-48.7885],[-20.3947,-48.8066],[-20.3947,-48.8428],[-20.3778,-48.8608],[-20.3438,-48.8608],[-20.3268,-48.8789],[-20.3268,-48.915],[-20.2928,-48.9512],[-20.2248,-48.9512],[-20.1908,-49.0054],[-20.2418,-49.0415],[-20.3098,-49.0415],[-20.3608,-49.0957],[-20.3778,-49.0957],[-20.3947,-49.1138],[-20.3947,-49.1499],[-20.3778,-49.168],[-20.3098,-49.168],[-20.2758,-49.2041],[-20.2758,-49.2222],[-20.2418,-49.2583],[-20.1568,-49.2583],[-20.1398,-49.2403],[-20.1398,-49.2222],[-20.0887,-49.168],[-20.0547,-49.168],[-20.0376,-49.1499],[-20.0206,-49.168],[-20.0036,-49.168],[-19.9525,-49.2041],[-19.9355,-49.2041],[-19.9355,-49.2222],[-19.9014,-49.2764],[-19.9014,-49.3125],[-19.9184,-49.3306],[-19.9184,-49.4571],[-19.9355,-49.4751],[-19.9355,-49.6558],[-19.9525,-49.6739],[-19.9525,-49.8184],[-19.9355,-49.8365],[-19.9355,-49.8726],[-19.9184,-49.8907],[-19.9184,-49.9088],[-19.8844,-49.9449],[-19.8844,-49.963],[-19.8503,-49.9991],[-19.8503,-50.1979],[-19.8332,-50.2159],[-19.8162,-50.2159],[-19.7991,-50.234],[-19.7821,-50.234],[-19.7821,-50.2521],[-19.748,-50.2882],[-19.748,-50.3063],[-19.7139,-50.3424],[-19.7139,-50.3786],[-19.7309,-50.3966],[-19.7309,-50.4508],[-19.748,-50.4689],[-19.748,-50.505],[-19.7821,-50.505],[-19.7991,-50.5231],[-19.7991,-50.5592],[-19.8162,-50.5773],[-19.8162,-50.6135],[-19.8503,-50.6496],[-19.8673,-50.6496],[-19.9695,-50.758],[-19.9695,-50.8303],[-19.9525,-50.8483],[-19.9525,-50.8664],[-19.9695,-50.8845],[-20.0206,-50.8303],[-20.0547,-50.8303],[-20.0717,-50.8122],[-20.1227,-50.8122],[-20.1398,-50.8303],[-20.1738,-50.8303],[-20.2078,-50.8664],[-20.2078,-50.9025],[-20.2248,-50.9206],[-20.2248,-50.9929],[-20.2078,-51.011],[-20.2078,-51.029],[-20.2418,-51.0832],[-20.2418,-51.1194],[-20.2588,-51.1374],[-20.2588,-51.2097],[-20.2758,-51.2278],[-20.2758,-51.2639],[-20.2928,-51.282],[-20.2928,-51.3],[-20.3268,-51.3362],[-20.3268,-51.3543],[-20.3947,-51.4265],[-20.4117,-51.4265],[-20.5815,-51.6072],[-20.5815,-51.6253],[-20.5984,-51.6433],[-20.6493,-51.6433],[-20.6663,-51.6253],[-20.8865,-51.6253],[-20.9373,-51.6614],[-20.9373,-51.6795],[-21.0557,-51.806],[-21.1572,-51.806],[-21.1572,-51.7879],[-21.2078,-51.7337],[-21.2754,-51.7337],[-21.3767,-51.8421],[-21.3767,-51.8602],[-21.4442,-51.9324],[-21.461,-51.9324],[-21.4779,-51.9505],[-21.4948,-51.9505],[-21.5116,-51.9686],[-21.5285,-51.9686],[-21.5453,-51.9866],[-21.5622,-51.9866],[-21.579,-52.0047],[-21.5959,-52.0047],[-21.6296,-52.0409],[-21.6464,-52.0409],[-21.6633,-52.0589],[-21.6801,-52.0589],[-21.7306,-52.0951],[-21.7474,-52.0951],[-21.7811,-52.1312],[-21.7979,-52.1312],[-21.8484,-52.1854],[-21.8652,-52.1854],[-21.9661,-52.2938],[-21.9829,-52.2938],[-22.0501,-52.3661],[-22.0669,-52.3661],[-22.1173,-52.4203],[-22.1173,-52.4384],[-22.1676,-52.4926],[-22.1676,-52.5106],[-22.2012,-52.5468],[-22.2012,-52.5648],[-22.2179,-52.5829],[-22.2179,-52.601],[-22.2515,-52.6552],[-22.2515,-52.6913],[-22.2683,-52.7094],[-22.2683,-52.7274],[-22.285,-52.7455],[-22.285,-52.7636],[-22.3018,-52.7817],[-22.3018,-52.7997],[-22.3186,-52.8178],[-22.3186,-52.8359],[-22.3521,-52.872],[-22.3688,-52.872],[-22.4693,-52.9804],[-22.4861,-52.9804]];
+const AX = 91.00621355, BX = 5074.74678905, AY = -5226.10785353, BY = -1778.63930334;
+const PX = (lat, lng) => [AX*lng + BX, AY*Math.log(Math.tan(Math.PI/4 + lat*Math.PI/360)) + BY];
+const LL = (x, y) => [(2*Math.atan(Math.exp((y - BY)/AY)) - Math.PI/2)*180/Math.PI, (x - BX)/AX];
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.createElementNS(NS, 'svg');
+svg.setAttribute('id', 'svgMapa'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Mapa do estado de São Paulo com as lojas');
+$('mapa').appendChild(svg);
+const contornoPx = SP_CONTORNO.map(([la, ln]) => PX(la, ln));
+const xs = contornoPx.map(p => p[0]), ys = contornoPx.map(p => p[1]);
+const EST = {x0:Math.min(...xs), x1:Math.max(...xs), y0:Math.min(...ys), y1:Math.max(...ys)};
+svg.innerHTML = `<rect x="-5000" y="-5000" width="12000" height="12000" fill="#E3E9E2"/>
+  <path d="M${contornoPx.map(p => p[0].toFixed(1)+','+p[1].toFixed(1)).join('L')}Z" fill="#F7FAF6" stroke="#123F28" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+  <g id="gRotulos"></g><g id="gNomes"></g><g id="gPinos"></g><g id="gTemp"></g>`;
+const gNomes = svg.querySelector('#gNomes'), gPinos = svg.querySelector('#gPinos'), gRot = svg.querySelector('#gRotulos'), gTemp = svg.querySelector('#gTemp');
+const vista = {cx:(EST.x0+EST.x1)/2, cy:(EST.y0+EST.y1)/2, w:EST.x1-EST.x0};
+const ESTADO_W = EST.x1 - EST.x0;
+const escalaTela = () => vista.w / Math.max(svg.clientWidth, 1);
+function aplicarVista(){
+  const cw = Math.max(svg.clientWidth, 1), ch = Math.max(svg.clientHeight, 1);
+  const h = vista.w * ch / cw;
+  svg.setAttribute('viewBox', `${vista.cx - vista.w/2} ${vista.cy - h/2} ${vista.w} ${h}`);
+  atualizarTamanhos();
+}
+function encaixar(x0, y0, x1, y1, folga = 1.12){
+  const cw = Math.max(svg.clientWidth, 1), ch = Math.max(svg.clientHeight, 1);
+  const w = Math.max((x1 - x0), (y1 - y0) * cw / ch) * folga;
+  vista.w = Math.max(w, ESTADO_W / 400); vista.cx = (x0 + x1)/2; vista.cy = (y0 + y1)/2; aplicarVista();
+}
+const mapa = {
+  fitBounds(b){ /* aceita [[lat,lng],[lat,lng]] ou lista de pontos */
+    if (b === SP_BOUNDS) return encaixar(EST.x0, EST.y0, EST.x1, EST.y1, 1.06);
+    const p = b.map(([la, ln]) => PX(la, ln)), px = p.map(q => q[0]), py = p.map(q => q[1]);
+    encaixar(Math.min(...px), Math.min(...py), Math.max(...px), Math.max(...py), 1.4);
+    if (vista.w < ESTADO_W / 60) { vista.w = ESTADO_W / 60; aplicarVista(); }
+  },
+  setView([la, ln], fator){ const [x, y] = PX(la, ln); vista.cx = x; vista.cy = y; vista.w = ESTADO_W / fator; aplicarVista(); },
+  getZoom(){ return ESTADO_W / vista.w; },
+  flyTo(ll, fator){ this.setView(ll, fator); },
+  invalidateSize(){ aplicarVista(); }
+};
+const ROT_FIXOS = ['São Paulo','Campinas','Ribeirão Preto','Bauru','São José do Rio Preto','Franca','Santos','Sorocaba','São José dos Campos','São Carlos','Piracicaba'];
+function desenharRotulos(){
+  const cid = {};
+  Object.values(lojas).forEach(l => { (cid[l.cidade] = cid[l.cidade] || []).push(PX(l.lat, l.lng)); });
+  gRot.innerHTML = Object.entries(cid).map(([c, ps]) => {
+    const x = ps.reduce((s, p) => s + p[0], 0)/ps.length, y = Math.min(...ps.map(p => p[1]));
+    return `<text data-fixo="${ROT_FIXOS.includes(c) ? 1 : 0}" data-x="${x}" data-y="${y}" x="${x}" y="${y}" text-anchor="middle" fill="#55625A" font-weight="600">${esc(c)}</text>`;
+  }).join('');
+}
+function atualizarTamanhos(){
+  const s = escalaTela(), z = mapa.getZoom();
+  gPinos.querySelectorAll('circle').forEach(c => c.setAttribute('r', (+c.dataset.r) * s));
+  gTemp.querySelectorAll('circle').forEach(c => c.setAttribute('r', 9 * s));
+  gRot.querySelectorAll('text').forEach(t => {
+    const ver = z >= 3 || t.dataset.fixo === '1';
+    t.style.display = ver ? '' : 'none';
+    t.setAttribute('font-size', 12 * s);
+    t.setAttribute('y', +t.dataset.y - 12 * s);
+  });
+  gNomes.style.display = z >= 10 ? '' : 'none';
+  gNomes.querySelectorAll('text').forEach(t => { t.setAttribute('font-size', 11 * s); t.setAttribute('x', +t.dataset.x + 10 * s); t.setAttribute('y', +t.dataset.y + 4 * s); });
+}
+function desenharMarcadores(){
+  desenharRotulos();
+  const ord = Object.entries(lojas).sort((a, b) => {
+    const o = {pendente:0, agendada:1, vencida:2, visitada:3};
+    return (a[0] === selKey) - (b[0] === selKey) || o[statusEf(a[1])] - o[statusEf(b[1])];
+  });
+  gPinos.innerHTML = ord.map(([k, l]) => {
+    const s = statusEf(l), sel = k === selKey, [x, y] = PX(l.lat, l.lng);
+    return `<circle data-k="${k}" data-r="${sel ? 11 : 7}" cx="${x}" cy="${y}" fill="${COR[s]}" stroke="${sel ? '#17251C' : '#fff'}" stroke-width="${sel ? 3 : 1.5}" vector-effect="non-scaling-stroke" style="cursor:pointer"><title>${l.num} · ${esc(l.nome)} (${ROTULO[s]})</title></circle>`;
+  }).join('');
+  gNomes.innerHTML = Object.values(lojas).map(l => { const [x, y] = PX(l.lat, l.lng);
+    return `<text data-x="${x}" data-y="${y}" fill="#17251C" stroke="#F7FAF6" stroke-width="3" paint-order="stroke" vector-effect="non-scaling-stroke">${l.num} ${esc(l.nome)}</text>`; }).join('');
+  atualizarTamanhos();
+}
+function marcarTemp(lat, lng){
+  const [x, y] = PX(lat, lng);
+  gTemp.innerHTML = `<circle cx="${x}" cy="${y}" fill="none" stroke="#17251C" stroke-width="3" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>`;
+  atualizarTamanhos();
+}
+function limparTemp(){ gTemp.innerHTML = ''; }
+
+/* arrastar, zoom na roda e pinça */
+const ponteiros = new Map(); let arrasto = null, moveu = false, pinca = null;
+const pontoSvg = (cx, cy) => { const r = svg.getBoundingClientRect(), s = escalaTela(), h = vista.w * r.height / r.width;
+  return [vista.cx - vista.w/2 + (cx - r.left) * s, vista.cy - h/2 + (cy - r.top) * s]; };
+function zoomEm(cx, cy, f){
+  const [x, y] = pontoSvg(cx, cy);
+  const nw = Math.min(Math.max(vista.w / f, ESTADO_W / 400), ESTADO_W * 1.6), k = nw / vista.w;
+  vista.cx = x + (vista.cx - x) * k; vista.cy = y + (vista.cy - y) * k; vista.w = nw; aplicarVista();
+}
+svg.addEventListener('wheel', e => { e.preventDefault(); zoomEm(e.clientX, e.clientY, e.deltaY < 0 ? 1.25 : 0.8); }, {passive:false});
+svg.addEventListener('pointerdown', e => {
+  svg.setPointerCapture(e.pointerId); ponteiros.set(e.pointerId, [e.clientX, e.clientY]); moveu = false;
+  if (ponteiros.size === 1) arrasto = {x:e.clientX, y:e.clientY, cx:vista.cx, cy:vista.cy, alvo:e.target};
+  if (ponteiros.size === 2) { const [a, b] = [...ponteiros.values()]; pinca = Math.hypot(a[0]-b[0], a[1]-b[1]); arrasto = null; }
+});
+svg.addEventListener('pointermove', e => {
+  if (!ponteiros.has(e.pointerId)) return;
+  ponteiros.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ponteiros.size === 2 && pinca) {
+    const [a, b] = [...ponteiros.values()], d = Math.hypot(a[0]-b[0], a[1]-b[1]);
+    zoomEm((a[0]+b[0])/2, (a[1]+b[1])/2, d / pinca); pinca = d; moveu = true; return;
+  }
+  if (!arrasto) return;
+  const dx = e.clientX - arrasto.x, dy = e.clientY - arrasto.y;
+  if (Math.abs(dx) + Math.abs(dy) > 4) moveu = true;
+  if (moveu) { const s = escalaTela(); vista.cx = arrasto.cx - dx * s; vista.cy = arrasto.cy - dy * s; aplicarVista(); }
+});
+function soltar(e){
+  if (!ponteiros.has(e.pointerId)) return;
+  ponteiros.delete(e.pointerId);
+  if (ponteiros.size < 2) pinca = null;
+  if (arrasto && !moveu && e.type === 'pointerup') {
+    const alvo = arrasto.alvo;
+    if (alvo && alvo.dataset && alvo.dataset.k) abrirLoja(alvo.dataset.k);
+    else if (modo === 'nova') {
+      const [x, y] = pontoSvg(e.clientX, e.clientY), [lat, lng] = LL(x, y);
+      $('nCoord').value = lat.toFixed(6) + ', ' + lng.toFixed(6);
+      marcarTemp(lat, lng); $('avisoMapa').style.display = 'none';
+    }
+  }
+  if (ponteiros.size === 0) arrasto = null;
+}
+svg.addEventListener('pointerup', soltar);
+svg.addEventListener('pointercancel', soltar);
 document.querySelectorAll('.zoom-rapido button').forEach(b => b.onclick = () => {
   const z = b.dataset.z;
   if (z === 'estado') mapa.fitBounds(SP_BOUNDS);
-  if (z === 'capital') mapa.setView([-23.565,-46.64], 11.5);
-  if (z === 'campinas') mapa.setView([-22.89,-47.06], 12);
+  if (z === 'capital') mapa.setView([-23.575, -46.66], 16);
+  if (z === 'campinas') mapa.setView([-22.885, -47.06], 18);
 });
-mapa.on('click', e => {
-  if (modo !== 'nova') return;
-  const {lat, lng} = e.latlng;
-  $('nCoord').value = lat.toFixed(6) + ', ' + lng.toFixed(6);
-  marcarTemp(lat, lng);
-  $('avisoMapa').style.display = 'none';
-});
-function marcarTemp(lat, lng){
-  if (marcadorTemp) marcadorTemp.setLatLng([lat,lng]);
-  else marcadorTemp = L.marker([lat,lng]).addTo(mapa);
-}
-
-function desenharMarcadores(){
-  Object.keys(marcadores).forEach(k => { if (!lojas[k]) { mapa.removeLayer(marcadores[k]); delete marcadores[k]; } });
-  Object.entries(lojas).forEach(([k,l]) => {
-    const s = statusEf(l), sel = k === selKey;
-    const estilo = {radius: sel ? 11 : 7, color: sel ? '#17251C' : '#fff', weight: sel ? 3 : 1.5, fillColor: COR[s], fillOpacity: 1};
-    if (!marcadores[k]) {
-      marcadores[k] = L.circleMarker([l.lat, l.lng], estilo).addTo(mapa).on('click', () => abrirLoja(k));
-    } else {
-      marcadores[k].setLatLng([l.lat, l.lng]).setStyle(estilo);
-    }
-    marcadores[k].bindTooltip(`${l.num} · ${esc(l.nome)} (${ROTULO[s]})`, {direction:'top', offset:[0,-6]});
-    if (s === 'visitada' || sel) marcadores[k].bringToFront();
-  });
-}
+new ResizeObserver(() => aplicarVista()).observe(svg);
 
 /* ---------- ORDENAÇÃO E FILTRO ---------- */
 const PESO = {vencida:0, agendada:1, pendente:2, visitada:3};
@@ -380,7 +473,7 @@ function abrirLoja(k){
   $('gSub').textContent = `${l.cidade}${l.codigo ? ' · código ' + l.codigo : ''}${l.cnpj ? ' · CNPJ ' + l.cnpj : ''}`;
   desenharForm(k);
   abrirGaveta();
-  mapa.flyTo([l.lat, l.lng], Math.max(mapa.getZoom(), 13), {duration:.6});
+  mapa.flyTo([l.lat, l.lng], Math.max(mapa.getZoom(), 30));
   render();
 }
 function desenharForm(k){
@@ -481,7 +574,7 @@ function abrirNova(){
   $('gRodape').innerHTML = '<button class="btn" id="nCancelar" style="border-color:var(--linha)">Cancelar</button><button class="btn prim" id="nSalvar">Incluir loja</button>';
   $('nCancelar').onclick = fecharGaveta;
   $('nSalvar').onclick = salvarNova;
-  $('nCoord').addEventListener('change', () => { const c = lerCoord($('nCoord').value); if (c) { marcarTemp(c[0], c[1]); mapa.setView(c, 15); } });
+  $('nCoord').addEventListener('change', () => { const c = lerCoord($('nCoord').value); if (c) { marcarTemp(c[0], c[1]); mapa.setView(c, 40); } });
   $('avisoMapa').style.display = 'block';
   abrirGaveta();
   render();
@@ -513,7 +606,7 @@ async function salvarNova(){
 }
 function sairModoNova(){
   $('avisoMapa').style.display = 'none';
-  if (marcadorTemp) { mapa.removeLayer(marcadorTemp); marcadorTemp = null; }
+  limparTemp();
 }
 
 /* ---------- GAVETA GERAL ---------- */
@@ -539,7 +632,7 @@ $('fCidade').onchange = () => {
   render();
   const v = $('fCidade').value;
   const pts = Object.values(lojas).filter(l => !v || l.cidade === v).map(l => [l.lat, l.lng]);
-  if (v && pts.length) mapa.fitBounds(pts, {padding:[40,40], maxZoom:14}); else if (!v) mapa.fitBounds(SP_BOUNDS);
+  if (v && pts.length) mapa.fitBounds(pts); else if (!v) mapa.fitBounds(SP_BOUNDS);
 };
 $('limpar').onclick = () => { $('busca').value=''; $('fStatus').value='todas'; $('fCidade').value=''; kpiAtivo='todas'; render(); mapa.fitBounds(SP_BOUNDS); };
 $('btnNova').onclick = abrirNova;
@@ -573,10 +666,8 @@ $('formLogin').onsubmit = async e => {
 /* desenha a base na hora, mesmo sem banco */
 lojas = JSON.parse(JSON.stringify(SEED));
 render();
-setTimeout(() => mapa.invalidateSize(), 300);
-window.addEventListener('resize', () => mapa.invalidateSize());
+mapa.fitBounds(SP_BOUNDS);
 
-if (semMapa) document.querySelector('.mapa-box').innerHTML = '<div class="vazio" style="padding:60px 20px">O mapa não carregou porque este navegador ou rede bloqueou a biblioteca do mapa (cdnjs.cloudflare.com). Abra pelo link do GitHub Pages.</div>';
 if (semBanco) $('subtitulo').textContent = 'Sem conexão com o banco (gstatic.com bloqueado). Mostrando a base local, sem salvar.';
 
 let refLojas = null;
