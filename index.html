@@ -565,9 +565,15 @@ $('formLogin').onsubmit = async e => {
   }
 };
 
+/* desenha a base na hora, mesmo sem banco */
+lojas = JSON.parse(JSON.stringify(SEED));
+render();
+setTimeout(() => mapa.invalidateSize(), 300);
+window.addEventListener('resize', () => mapa.invalidateSize());
+
 let refLojas = null;
 auth.onAuthStateChanged(u => {
-  if (!u) { auth.signInAnonymously().catch(e => { $('titulo').textContent = 'Sem acesso ao banco: ' + e.code; }); return; }
+  if (!u) { auth.signInAnonymously().catch(e => { $('subtitulo').textContent = 'Sem conexão com o banco (' + e.code + '). Mostrando a base local, sem salvar.'; }); return; }
   usuario = u; editor = !u.isAnonymous;
   if (refLojas) refLojas.off();
   refLojas = db.ref('lojas');
@@ -581,7 +587,7 @@ auth.onAuthStateChanged(u => {
     if (selKey && !lojas[selKey]) fecharGaveta();
         render();
     if (selKey && modo === 'loja') { guardarCampos(); desenharForm(selKey); }
-  }, e => { $('titulo').textContent = 'Sem acesso ao banco: ' + e.code; });
+  }, e => { $('subtitulo').textContent = 'Sem acesso ao banco (' + e.code + '). Mostrando a base local, sem salvar.'; });
 });
 </script>
 </body>
