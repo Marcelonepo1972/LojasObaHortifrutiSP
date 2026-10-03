@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visitas às Lojas Oba SP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --folha:#1E6B43; --folha-esc:#123F28; --manga:#E39A2D; --pedra:#A6ADA8; --tomate:#C43E3E;
+  --tinta:#17251C; --tinta2:#55625A; --fundo:#EEF1EC; --sup:#FFFFFF; --linha:#D9DFD8;
+  --f-corpo:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-titulo:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--f-corpo);color:var(--tinta);background:var(--fundo);font-size:15px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--manga);outline-offset:2px}
+
+.app{display:grid;grid-template-rows:auto auto auto 1fr;height:100%}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px 8px;background:var(--folha-esc);color:#fff}
+header h1{font-family:var(--f-titulo);font-weight:700;font-size:clamp(22px,3vw,34px);line-height:1.05;margin:0;letter-spacing:.2px}
+header p{margin:4px 0 0;color:#BFD3C5;font-size:14px}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.btn{border:1px solid transparent;border-radius:6px;padding:8px 14px;font-weight:600;background:var(--sup);color:var(--tinta)}
+.btn.prim{background:var(--folha);color:#fff}
+.btn.claro{background:transparent;border-color:#5E8A6F;color:#fff}
+.btn.perigo{background:transparent;border-color:var(--tomate);color:var(--tomate)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.trilha-wrap{background:var(--folha-esc);padding:6px 20px 14px}
+.trilha{display:flex;gap:2px;height:14px}
+.trilha button{flex:1;border:0;padding:0;border-radius:2px;min-width:3px}
+.trilha button:hover{transform:scaleY(1.5)}
+.trilha-leg{display:flex;justify-content:space-between;color:#BFD3C5;font-size:12px;margin-top:6px}
+
+.kpis{display:flex;background:var(--sup);border-bottom:1px solid var(--linha);overflow-x:auto}
+.kpi{flex:1;min-width:120px;border:0;background:none;text-align:left;padding:10px 18px;border-right:1px solid var(--linha);border-bottom:3px solid transparent}
+.kpi.ativo{border-bottom-color:currentColor}
+.kpi b{display:block;font-family:var(--f-titulo);font-size:30px;line-height:1;font-weight:700}
+.kpi span{font-size:13px;color:var(--tinta2)}
+.kpi .sinal{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+
+main{display:grid;grid-template-columns:1fr 390px;min-height:0}
+#mapa{min-height:0;background:#DDE5DC}
+.zoom-rapido{position:absolute;z-index:500;top:10px;right:10px;display:flex;gap:4px}
+.zoom-rapido button{border:1px solid var(--linha);background:var(--sup);border-radius:5px;padding:5px 10px;font-weight:600;font-size:13px;box-shadow:0 1px 3px rgba(23,37,28,.18)}
+.mapa-box{position:relative;min-height:0}
+.aviso-mapa{position:absolute;z-index:500;left:50%;top:10px;transform:translateX(-50%);background:var(--manga);color:#2A1A00;font-weight:600;padding:6px 12px;border-radius:5px;display:none}
+
+.lista{display:flex;flex-direction:column;min-height:0;background:var(--sup);border-left:1px solid var(--linha)}
+.filtros{padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;border-bottom:1px solid var(--linha)}
+.filtros input,.filtros select{width:100%;padding:8px 10px;border:1px solid var(--linha);border-radius:6px;background:var(--fundo)}
+.filtros input{grid-column:1/-1}
+.cont{padding:8px 14px;font-size:13px;color:var(--tinta2);display:flex;justify-content:space-between;align-items:center}
+.cont button{border:0;background:none;color:var(--folha);font-weight:600;padding:0}
+#itens{overflow-y:auto;flex:1}
+.item{display:grid;grid-template-columns:4px 1fr auto;gap:12px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--linha);background:none;padding:10px 14px 10px 0}
+.item:hover{background:#F5F7F4}
+.item.sel{background:#E7F0E9}
+.item i{border-radius:0 3px 3px 0}
+.item strong{display:block;font-weight:600}
+.item small{color:var(--tinta2)}
+.item .st{text-align:right;font-size:13px;font-weight:600;white-space:nowrap}
+.item .st small{display:block;font-weight:400}
+.vazio{padding:30px 16px;color:var(--tinta2);text-align:center}
+
+/* gaveta */
+.gaveta{position:fixed;z-index:1000;top:0;right:0;height:100%;width:min(420px,100%);background:var(--sup);box-shadow:-8px 0 30px rgba(23,37,28,.22);transform:translateX(105%);transition:transform .22s ease;display:flex;flex-direction:column}
+.gaveta.aberta{transform:none}
+.gav-topo{padding:16px 18px;border-bottom:1px solid var(--linha);display:flex;justify-content:space-between;gap:10px}
+.gav-topo h2{font-family:var(--f-titulo);font-size:26px;line-height:1.05;margin:0}
+.gav-topo p{margin:4px 0 0;color:var(--tinta2);font-size:13px}
+.fechar{border:0;background:none;font-size:26px;line-height:1;padding:0 4px;color:var(--tinta2)}
+.gav-corpo{padding:16px 18px;overflow-y:auto;flex:1}
+.gav-corpo label{display:block;font-weight:600;font-size:13px;margin:14px 0 5px}
+.gav-corpo input,.gav-corpo textarea,.gav-corpo select{width:100%;padding:9px 10px;border:1px solid var(--linha);border-radius:6px;background:var(--fundo)}
+.gav-corpo textarea{min-height:80px;resize:vertical}
+.endereco{background:var(--fundo);border-radius:6px;padding:10px 12px;font-size:14px}
+.links{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.links a,.links button{font-size:13px;font-weight:600;color:var(--folha);background:none;border:1px solid var(--linha);border-radius:6px;padding:6px 10px;text-decoration:none}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--linha);border-radius:7px;overflow:hidden}
+.seg button{border:0;background:var(--sup);padding:10px 4px;font-weight:600;border-right:1px solid var(--linha)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"][data-s="pendente"]{background:var(--pedra);color:#fff}
+.seg button[aria-pressed="true"][data-s="agendada"]{background:var(--manga);color:#2A1A00}
+.seg button[aria-pressed="true"][data-s="visitada"]{background:var(--folha);color:#fff}
+.gav-rodape{padding:14px 18px;border-top:1px solid var(--linha);display:flex;gap:8px;justify-content:space-between}
+.bloqueio{margin-top:16px;padding:12px;border-radius:6px;background:#FFF6E6;color:#6B4600;font-size:14px}
+.hist{margin-top:18px;font-size:13px;color:var(--tinta2)}
+.hist h3{font-size:13px;color:var(--tinta);margin:0 0 6px}
+.hist div{padding:5px 0;border-top:1px dashed var(--linha)}
+.dica{font-size:12px;color:var(--tinta2);margin-top:4px}
+.dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dupla label{margin-top:14px}
+
+.modal-fundo{position:fixed;inset:0;z-index:1100;background:rgba(18,30,22,.55);display:none;align-items:center;justify-content:center;padding:16px}
+.modal-fundo.aberto{display:flex}
+.modal{background:var(--sup);border-radius:10px;padding:20px;width:min(360px,100%)}
+.modal h2{font-family:var(--f-titulo);margin:0 0 4px;font-size:26px}
+.modal label{display:block;font-weight:600;font-size:13px;margin:12px 0 5px}
+.modal input{width:100%;padding:9px 10px;border:1px solid var(--linha);border-radius:6px}
+.erro{color:var(--tomate);font-size:13px;margin-top:8px;min-height:18px}
+
+.toast{position:fixed;z-index:1200;left:50%;bottom:20px;transform:translateX(-50%) translateY(80px);background:var(--tinta);color:#fff;padding:10px 16px;border-radius:6px;font-weight:600;transition:transform .2s}
+.toast.on{transform:translateX(-50%) translateY(0)}
+
+.leaflet-tooltip{font-family:var(--f-corpo);font-weight:600}
+
+@media (max-width:860px){
+  .app{display:block;height:auto}
+  html,body{height:auto}
+  header{flex-direction:column}
+  .acoes{justify-content:flex-start}
+  main{display:block}
+  #mapa{height:55vh}
+  .lista{border-left:0}
+  #itens{overflow:visible}
+  .gaveta{top:auto;bottom:0;height:88vh;width:100%;border-radius:14px 14px 0 0;transform:translateY(105%)}
+  .gaveta.aberta{transform:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1 id="titulo">Carregando lojas…</h1>
+      <p id="subtitulo">&nbsp;</p>
+    </div>
+    <div class="acoes">
+      <button class="btn claro" id="btnCsv">Exportar CSV</button>
+      <button class="btn claro" id="btnNova">Incluir loja</button>
+      <button class="btn" id="btnLogin">Entrar</button>
+    </div>
+  </header>
+  <div class="trilha-wrap">
+    <div class="trilha" id="trilha" aria-label="Uma barra por loja, colorida pelo status"></div>
+    <div class="trilha-leg"><span>Visitadas primeiro</span><span id="legTrilha"></span></div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <main>
+    <div class="mapa-box">
+      <div id="mapa"></div>
+      <div class="zoom-rapido">
+        <button data-z="estado">Estado</button>
+        <button data-z="capital">Capital</button>
+        <button data-z="campinas">Campinas</button>
+      </div>
+      <div class="aviso-mapa" id="avisoMapa">Clique no mapa onde fica a loja</div>
+    </div>
+    <section class="lista">
+      <div class="filtros">
+        <input id="busca" type="search" placeholder="Buscar por nome, número ou cidade">
+        <select id="fStatus">
+          <option value="todas">Todos os status</option>
+          <option value="pendente">Pendentes</option>
+          <option value="agendada">Agendadas no prazo</option>
+          <option value="vencida">Agendadas vencidas</option>
+          <option value="visitada">Visitadas</option>
+        </select>
+        <select id="fCidade"><option value="">Todas as cidades</option></select>
+      </div>
+      <div class="cont"><span id="contagem"></span><button id="limpar">Limpar filtros</button></div>
+      <div id="itens"></div>
+    </section>
+  </main>
+</div>
+
+<aside class="gaveta" id="gaveta" aria-hidden="true">
+  <div class="gav-topo">
+    <div><h2 id="gTitulo"></h2><p id="gSub"></p></div>
+    <button class="fechar" id="gFechar" aria-label="Fechar">×</button>
+  </div>
+  <div class="gav-corpo" id="gCorpo"></div>
+  <div class="gav-rodape" id="gRodape"></div>
+</aside>
+
+<div class="modal-fundo" id="mLogin">
+  <form class="modal" id="formLogin">
+    <h2>Entrar para editar</h2>
+    <p style="margin:0;color:var(--tinta2);font-size:14px">Sem login, o painel fica só para consulta.</p>
+    <label for="lEmail">E-mail</label><input id="lEmail" type="email" autocomplete="username" required>
+    <label for="lSenha">Senha</label><input id="lSenha" type="password" autocomplete="current-password" required>
+    <div class="erro" id="lErro"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button type="button" class="btn" id="lCancelar" style="border-color:var(--linha)">Cancelar</button>
+      <button type="submit" class="btn prim">Entrar</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBNj_euCIwwBmFOUu67F6k9Ld_bzuFWGpQ",
+  authDomain: "lojasobahortifrutisp.firebaseapp.com",
+  databaseURL: "https://lojasobahortifrutisp-default-rtdb.firebaseio.com",
+  projectId: "lojasobahortifrutisp",
+  storageBucket: "lojasobahortifrutisp.firebasestorage.app",
+  messagingSenderId: "749184746510",
+  appId: "1:749184746510:web:d268c2482688ad91dce85f"
+};
+const SEED = {"L1":{"num":1,"nome":"CAROLINA","codigo":"1","cnpj":"049720920002-03","endereco":"R. Carolina Florence, 300 - Jardim Guanabara, Campinas - SP, 13073-226","cidade":"Campinas","lat":-22.8851,"lng":-47.0619,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L3":{"num":3,"nome":"BONFIM","codigo":"7","cnpj":"049720920005-56","endereco":"Rua Quintino Bocaiúva, 133 - Bonfim, Campinas - SP, 13070-017","cidade":"Campinas","lat":-22.898117,"lng":-47.089199,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L5":{"num":5,"nome":"AMOREIRAS","codigo":"9","cnpj":"049720920006-37","endereco":"Av. das Amoreiras, 1699 - São Bernardo, Campinas - SP, 13012-100","cidade":"Campinas","lat":-22.918173,"lng":-47.072347,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L6":{"num":6,"nome":"AMERICANA","codigo":"10","cnpj":"049720920015-28","endereco":"Rua Washington Luiz, 658 - Centro, Americana-sp, 13465-520","cidade":"Americana","lat":-22.74003,"lng":-47.334632,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L9":{"num":9,"nome":"TATUAPÉ","codigo":"13","cnpj":"049720920011-02","endereco":"R. Azevedo Soares, 1585 - Tatuapé, São Paulo - SP, 03322-001","cidade":"São Paulo","lat":-23.548218,"lng":-46.563011,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L11":{"num":11,"nome":"BUTANTA","codigo":"14","cnpj":"049720920010-13","endereco":"Av. Corifeu de Azevedo Marques, 1000 - Butantã, São Paulo - SP, 05582-001","cidade":"São Paulo","lat":-23.566447,"lng":-46.743712,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L12":{"num":12,"nome":"IBITIRAMA","codigo":"15","cnpj":"049720920012-85","endereco":"R. Ibitirama, 1269 - Vila Prudente, São Paulo - SP, 03133-200","cidade":"São Paulo","lat":-23.591122,"lng":-46.580956,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L13":{"num":13,"nome":"MOEMA","codigo":"16","cnpj":"049720920016-09","endereco":"Av. Macuco, 655 A - Indianópolis, São Paulo - SP, 04523-001","cidade":"São Paulo","lat":-23.60441,"lng":-46.66575,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L14":{"num":14,"nome":"PENHA","codigo":"17","cnpj":"049720920013-66","endereco":"Av. Amador Bueno da Veiga, 2703 - Penha de França, São Paulo - SP, 03653-000","cidade":"São Paulo","lat":-23.522953,"lng":-46.519971,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L15":{"num":15,"nome":"SANTANA PUJOL","codigo":"18","cnpj":"049720920009-80","endereco":"Rua Alfredo Pujol, 1324 - Santana, São Paulo - SP, 02017-003","cidade":"São Paulo","lat":-23.500247,"lng":-46.634625,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L17":{"num":17,"nome":"THE MALL","codigo":"20","cnpj":"049720920008-07","endereco":"Rua Rute Ferraz de Angelis,. 886 - Loja 01 a 07 - Loteamento Residencial Vila Bell, Campinas - SP, 13087-729","cidade":"Campinas","lat":-22.9289,"lng":-47.0778,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L19":{"num":19,"nome":"MORUMBI","codigo":"22","cnpj":"049720920019-51","endereco":"Rua Jose da Silva Ribeiro, 31 - Vila Andrade, São Paulo - SP, 05726-130","cidade":"São Paulo","lat":-23.625232,"lng":-46.741175,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L21":{"num":21,"nome":"CENTRO","codigo":"24","cnpj":"049720920017-90","endereco":"Rua Regente Feijo, 1305 - Centro, Campinas - SP, 13013-050","cidade":"Campinas","lat":-22.907621,"lng":-47.059154,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L23":{"num":23,"nome":"CAMBUÍ","codigo":"34198","cnpj":"049720920026-80","endereco":"Rua Maria Monteiro, 1270 - Cambui, Campinas - SP, 13025-152","cidade":"Campinas","lat":-22.896227,"lng":-47.052101,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L24":{"num":24,"nome":"SANTANA ATALIBA","codigo":"35087","cnpj":"049720920027-61","endereco":"Av, General Ataliba Leonel, 1155 - Santana, São Paulo - SP, 02033-000","cidade":"São Paulo","lat":-23.4982,"lng":-46.6175,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L25":{"num":25,"nome":"SANTANA TOLLE","codigo":"38443","cnpj":"049720920028-42","endereco":"Rua Augusto Tolle, 933 - Santana - SP, 02405-001","cidade":"São Paulo","lat":-23.48573,"lng":-46.63332,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L26":{"num":26,"nome":"SOROCABA 2","codigo":"35093","cnpj":"049720920021-76","endereco":"Av. Antonio Carlos Comitre, 1135 - Parque Campolim, Sorocaba - SP, 18047-620","cidade":"Sorocaba","lat":-23.52404,"lng":-47.46484,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L29":{"num":29,"nome":"MOOCA","codigo":"68862","cnpj":"049720920034-90","endereco":"Rua Tobias Barreto, 735, Loja 1 a 8 e 19 a 25 - Mooca, São Paulo - SP, 03176-000","cidade":"São Paulo","lat":-23.55025,"lng":-46.58868,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L30":{"num":30,"nome":"PIRACICABA","codigo":"76411","cnpj":"049720920035-71","endereco":"Av. Saldanha Marinho, 1900 - São Judas, Piracicaba - SP, 13416-257","cidade":"Piracicaba","lat":-22.72156,"lng":-47.63863,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L31":{"num":31,"nome":"SOUSAS","codigo":"85213","cnpj":"049720920037-33","endereco":"Av. Antonio Carlos Couto de Barros, 475, Sala SUC 11/12 - Vila Sonia (SOUSAS), Campinas - SP, 13105-500","cidade":"Campinas","lat":-22.88095,"lng":-46.97019,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L32":{"num":32,"nome":"VILA MARIANA","codigo":"85221","cnpj":"049720920036-52","endereco":"Rua Domingos de Morais, 931 - Vila Mariana, São Paulo - SP, 04035-001","cidade":"São Paulo","lat":-23.57745,"lng":-46.64122,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L33":{"num":33,"nome":"GALLERIA","codigo":"93602","cnpj":"049720920038-14","endereco":"Av. Selma Parada (BAILARINA), 505, Piso as Loja A S30 - Jardim Madalena, Campinas - SP, 13091-605","cidade":"Campinas","lat":-22.864573,"lng":-47.021456,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L34":{"num":34,"nome":"ANÁLIA FRANCO","codigo":"93940","cnpj":"049720920039-03","endereco":"Rua Antonio Alves Barril, S/N - Jardim Analia Franco, São Paulo - SP, 03338-000","cidade":"São Paulo","lat":-23.56034,"lng":-46.56155,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L35":{"num":35,"nome":"SÃO JOSÉ DOS CAMPOS","codigo":"94084","cnpj":"049720920040-39","endereco":"Av. Comendador de Vicente Paulo Penido, 1000 - Parque Residencial Aquarius, São Jose dos Campos - SP, 12246-856","cidade":"São José dos Campos","lat":-23.2176,"lng":-45.90289,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L36":{"num":36,"nome":"ANGELICA","codigo":"95643","cnpj":"049720920042-09","endereco":"Av. Angelica, 635 - Santa Cecilia, São Paulo - SP, 01227-000","cidade":"São Paulo","lat":-23.5367,"lng":-46.6589,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L37":{"num":37,"nome":"TEODORO SAMPAIO","codigo":"96035","cnpj":"049720920043-81","endereco":"Rua Teodoro Sampaio, 1424, Terreo Parte Subsl 1 2 3 Parte - Pinheiros, São Paulo - SP, 05406-100","cidade":"São Paulo","lat":-23.56114,"lng":-46.68344,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L38":{"num":38,"nome":"RIBEIRÃO PRETO","codigo":"97455","cnpj":"049720920044-62","endereco":"Av. Presidente Vargas, 2265 - Jardim Santa Angela, Ribeirão Preto - SP, 14020-525","cidade":"Ribeirão Preto","lat":-21.2024,"lng":-47.8165,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L39":{"num":39,"nome":"INTERLAGOS","codigo":"97908","cnpj":"049720920045-43","endereco":"Av. Interlagos, 500 - Jardim Marajoara, São Paulo - SP, 04660-000","cidade":"São Paulo","lat":-23.65834,"lng":-46.67961,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L40":{"num":40,"nome":"MARKET PLACE","codigo":"97910","cnpj":"049720920046-24","endereco":"Av. Doutor Chucri Zaidan, 902 - Vila Cordeiro, São Paulo - SP, 04583-903","cidade":"São Paulo","lat":-23.61632,"lng":-46.69667,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L41":{"num":41,"nome":"LEOPOLDINA","codigo":"97911","cnpj":"049720920047-05","endereco":"Rua Froben, 99 - Vila Leopoldina, São Paulo - SP, 05315-010","cidade":"São Paulo","lat":-23.53196,"lng":-46.73302,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L42":{"num":42,"nome":"SANTO ANDRÉ","codigo":"99976","cnpj":"049720920048-96","endereco":"Av. Dom Pedro II, 185 - Jardim, Santo Andre - SP, 09080-110","cidade":"Santo André","lat":-23.6539,"lng":-46.5331,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L43":{"num":43,"nome":"PERDIZES","codigo":"112990","cnpj":"049720920050-00","endereco":"Rua Apinajes, 104, Loja 108 / 114/ 126 - Perdizes, São Paulo - SP, 05017-000","cidade":"São Paulo","lat":-23.53704,"lng":-46.67986,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L55":{"num":55,"nome":"CAMPO BELO","codigo":"1729640","cnpj":"049720920049-77","endereco":"Rua Dr. Jesuino Maciel, 1285 - Campo Belo, São Paulo - SP, 04615-003","cidade":"São Paulo","lat":-23.62165,"lng":-46.66893,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L56":{"num":56,"nome":"VILA MASCOTE","codigo":"181177","cnpj":"049720920053-53","endereco":"Av. Santa Catarina, 1415 - Vila Mascote, São Paulo - SP, 04378-300","cidade":"São Paulo","lat":-23.6394,"lng":-46.6694,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L57":{"num":57,"nome":"JUNDIAI","codigo":"181257","cnpj":"049720920052-72","endereco":"Av. Doutor Adilson Rodrigues, 77 - Jardim das Samambaias, Jundiai - SP, 13211.685","cidade":"Jundiaí","lat":-23.196196,"lng":-46.912973,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L63":{"num":63,"nome":"SHOP JUNDIAI","codigo":"345609","cnpj":"049720920066-78","endereco":"Av. Nove de Julho, 3333, Loja 151 - Piso 01 - Anhangabau, Jundiai - SP, 13208-056","cidade":"Jundiaí","lat":-23.19876,"lng":-46.89076,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L64":{"num":64,"nome":"ALPHAVILLE BARUERI","codigo":"1462053","cnpj":"049720920068-30","endereco":"Alameda Rio Negro, 111, Loja 201 ABC andar 2 - Alphaville Centro Industrial, Barueri - SP, 06454-000","cidade":"Barueri","lat":-23.49818,"lng":-46.84823,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L65":{"num":65,"nome":"RIBEIRÃO PRETO 2","codigo":"1622913","cnpj":"049720920090-06","endereco":"Av. Dutor Francisco Junqueira, 3000 - Jardim America, Ribeirão Preto - SP, 14020-103","cidade":"Ribeirão Preto","lat":-21.16949,"lng":-47.8102,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L67":{"num":67,"nome":"SÃO BERNARDO","codigo":"386394","cnpj":"049720920089-64","endereco":"Av. Francisco Prestes Maia, 1491 - Centro, São Bernardo do Campo - SP, 09770-000","cidade":"São Bernardo do Campo","lat":-23.70939,"lng":-46.5456,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L69":{"num":69,"nome":"ALPHAVILLE","codigo":"329082","cnpj":"049720920071-35","endereco":"Alameda Araguaia, 120 - Alphaville Industrial, Barueri - SP, 06455-000","cidade":"Barueri","lat":-23.49893,"lng":-46.85179,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L71":{"num":71,"nome":"APUCARANA","codigo":"367442","cnpj":"049720920077-20","endereco":"Rua Apucarana, 1040 - Tatuape, São Paulo - SP, 03311-001","cidade":"São Paulo","lat":-23.55027,"lng":-46.56256,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L72":{"num":72,"nome":"SHOPPING TATUAPÉ","codigo":"1786048","cnpj":"049720920092-60","endereco":"Rua Domingos Agostim, 91, Loja T01/T02 Piso Tatuape - Cidade Mae do Ceu, São Paulo - SP, 03306-900","cidade":"São Paulo","lat":-23.54213,"lng":-46.57616,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L73":{"num":73,"nome":"CAMBUI 2","codigo":"1674031","cnpj":"049720920091-89","endereco":"Rua General Osorio, 2081 - Cambui, Campinas - SP, 13025-155","cidade":"Campinas","lat":-22.901451,"lng":-47.053691,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L74":{"num":74,"nome":"ITAIM BIBI","codigo":"1710372","cnpj":"049720920070-54","endereco":"Av. Pres. Juscelino Kubitschek, 1830, Cond Ed. São Luiz Bloco 1 Un A - Vila Nova Conceição, São Paulo - SP, 04543-900","cidade":"São Paulo","lat":-23.591112,"lng":-46.686635,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L75":{"num":75,"nome":"NOVA CAMPINAS","codigo":"1710377","cnpj":"049720920078-01","endereco":"Av. Doutor Hermas Braga, 941 - Nova Campinas, São Paulo - SP, 13092-133","cidade":"Campinas","lat":-22.9018,"lng":-47.03931,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L76":{"num":76,"nome":"SANTOS","codigo":"1812392","cnpj":"049720920093-40","endereco":"Av. General Francisco Glicério, 206, Loja 06 - Encruzilhada, Santos - SP, 11065-400","cidade":"Santos","lat":-23.96189,"lng":-46.33881,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L79":{"num":79,"nome":"SOROCABA 3","codigo":"1898423","cnpj":"049720920081-07","endereco":"Av. Engenheiro Carlos Reinaldo Mendes, 2180 - Além Ponte, Sorocaba - SP, 18013-280","cidade":"Sorocaba","lat":-23.48465,"lng":-47.42831,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L80":{"num":80,"nome":"ITU","codigo":"1898422","cnpj":"049720920082-98","endereco":"Av. Prudente de Moraes, 340 - Vila Nova, Itu - SP, 13309-050","cidade":"Itu","lat":-23.27469,"lng":-47.29105,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L81":{"num":81,"nome":"PAMPLONA","codigo":"1898420","cnpj":"049720920080-26","endereco":"Rua Pamplona, 822, Loja 01 e 02 - Jardim Paulista - São Paulo - SP, 01405-001","cidade":"São Paulo","lat":-23.56803,"lng":-46.65778,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L86":{"num":86,"nome":"SÃO JOSÉ DO RIO PRETO","codigo":"1990455","cnpj":"049720920094-21","endereco":"Av. Juscelino Kubitschek de Oliveira - Presidente, 3530, Jardim Panorama, São Jose do Rio Preto - SP, 15091-450","cidade":"São José do Rio Preto","lat":-20.83394,"lng":-49.40671,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L87":{"num":87,"nome":"ITATIBA","codigo":"2034187","cnpj":"049720920095-02","endereco":"Av. Marechal Castelo Branco, 42/60, Sala A e B - Jardim da Luz, Itatiba - SP, 13255-350","cidade":"Itatiba","lat":-23.01946,"lng":-46.84244,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L88":{"num":88,"nome":"GRANJA VIANA","codigo":"2060714","cnpj":"049720920096-93","endereco":"Rodovia Raposo Tavares, 22800 - Lageadinho, Cotia - SP, 06709-015","cidade":"Cotia","lat":-23.590689,"lng":-46.831748,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L104":{"num":104,"nome":"INDAIATUBA","codigo":"32016","cnpj":"049720920023-38","endereco":"Av. Conceição, 2784 - Vila Georgina, Indaiatuba - SP, 13333-055","cidade":"Indaiatuba","lat":-23.079074,"lng":-47.199086,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L108":{"num":108,"nome":"LIMEIRA","codigo":"32018","cnpj":"049720920024-19","endereco":"R. Sen. Vergueiro, 1070 - Centro, Limeira - SP, 13480-002","cidade":"Limeira","lat":-22.56803,"lng":-47.40689,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L121":{"num":121,"nome":"ARBORAIS","codigo":"2097977","cnpj":"049720920097-74","endereco":"Av. Valderes Fiolo Pupo de Campos Ferreira, 1575 - Campinas, SP, 13098-052","cidade":"Campinas","lat":-22.9053,"lng":-47.0659,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L122":{"num":122,"nome":"BAURU","codigo":"2114443","cnpj":"049720920084-50","endereco":"Av. Getúlio Vargas, 23-2 - Vila Aviação, Bauru - SP - 17018-711","cidade":"Bauru","lat":-22.348209,"lng":-49.053916,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L123":{"num":123,"nome":"NOVA CANTAREIRA","codigo":"2147546","cnpj":"049720920098-55","endereco":"Av. Nova Cantareira, 3640 - Tucuruvi, São Paulo - SP, 02340-001","cidade":"São Paulo","lat":-23.47731,"lng":-46.61091,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L127":{"num":127,"nome":"FRANCA","codigo":"2779648","cnpj":"049720920085-30","endereco":"Av. Doutor Ismael Alonso Y. Alonso, 50 - Jardim Veneza, Franca - SP, 14403-000","cidade":"Franca","lat":-20.55046,"lng":-47.40342,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L128":{"num":128,"nome":"URBANOVA","codigo":"3383727","cnpj":"49720920086-11","endereco":"Av. Shishima Hifumi, 523 - Urbanova, São José dos Campos - SP, 12244-390","cidade":"São José dos Campos","lat":-23.2076,"lng":-45.9548,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L134":{"num":134,"nome":"DAMHA","codigo":"2968843","cnpj":"049720920110-86","endereco":"Av. Nadima Damha, 3465, Lote 13 A - Damha Galleria, São Jose do Rio Preto - SP, 15061-886","cidade":"São José do Rio Preto","lat":-20.81765,"lng":-49.34689,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L135":{"num":135,"nome":"VILA MARIANA 2","codigo":"3305935","cnpj":"049720920087-00","endereco":"Av. Conselheiro Rodrigues Alves, 925 - Vila Mariana, São Paulo - SP, 04014-012","cidade":"São Paulo","lat":-23.589,"lng":-46.645,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L136":{"num":136,"nome":"SÃO CARLOS","codigo":"3370612","cnpj":"049720920111-67","endereco":"Av. Bruno Ruggiero Filho, 31 - Parque Santa Felicia Jardim, São Carlos - SP, 13562-420","cidade":"São Carlos","lat":-22.00626,"lng":-47.91944,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L139":{"num":139,"nome":"ITAIM BIBI 2","codigo":"3536394","cnpj":"049720920099-36","endereco":"Rua Clodomiro Amazonas, 1132 - Vila Nova Conceição, São Paulo - SP, 04537-002","cidade":"São Paulo","lat":-23.59474,"lng":-46.67682,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L140":{"num":140,"nome":"SWISS PARK","codigo":"3519954","cnpj":"049720920100-04","endereco":"Av. Francisco Alfredo Junior, 706 - Swiss Park, Campinas - SP, 13049-255","cidade":"Campinas","lat":-22.96042,"lng":-47.06621,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L141":{"num":141,"nome":"RIO CLARO","codigo":"3555187","cnpj":"49720920101-95","endereco":"Av. Presidente Kennedy, 184 - Estadio, Rio Claro - SP, 13501-270","cidade":"Rio Claro","lat":-22.42757,"lng":-47.56364,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L142":{"num":142,"nome":"VILA MASCOTE 2","codigo":"3673767","cnpj":"49720920113-29","endereco":"Rua Engenheiro Jorge Oliva, 381 - Vila Mascote, São Paulo - SP, 04362-060","cidade":"São Paulo","lat":-23.64538,"lng":-46.66773,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L143":{"num":143,"nome":"RIO GRANDE","codigo":"3673769","cnpj":"049720920114-00","endereco":"Rua Rio Grande, 615 - Jardim Campos, São Paulo - SP, 04018-001","cidade":"São Paulo","lat":-23.588394,"lng":-46.642401,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L144":{"num":144,"nome":"SÃO BERNARDO 2","codigo":"3673771","cnpj":"49720920115-90","endereco":"Av. Kennedy, 752 - Jardim do Mar, São Bernardo do Campo - SP, 09726-253","cidade":"São Bernardo do Campo","lat":-23.68235,"lng":-46.55749,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L145":{"num":145,"nome":"EMBARE","codigo":"3673776","cnpj":"49720920116-71","endereco":"Av. Doutor Epitácio Pessoa, 215 - Aparecida, Santos - SP, 11040-095","cidade":"Santos","lat":-23.97574,"lng":-46.31483,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L146":{"num":146,"nome":"ARAPANES","codigo":"3673778","cnpj":"49720920117-52","endereco":"Alameda Arapanés, 1111 - Indianápolis, São Paulo - SP, 04524-001","cidade":"São Paulo","lat":-23.605244,"lng":-46.665691,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L147":{"num":147,"nome":"OLIMPIA","codigo":"3673780","cnpj":"49720920118-33","endereco":"Av. Helio Pellegrino, 531 - Vila Nova Conceição - São Paulo - SP, 04513-100","cidade":"São Paulo","lat":-23.59801,"lng":-46.67687,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L148":{"num":148,"nome":"PARAISO","codigo":"3673781","cnpj":"49720920119-14","endereco":"Rua Manoel da Nobrega, 199 - Paraiso, São Paulo, SP, 04001-081","cidade":"São Paulo","lat":-23.56848,"lng":-46.64896,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L149":{"num":149,"nome":"INTERLAGOS","codigo":"3673783","cnpj":"49720920120-58","endereco":"Av. Engenheiro Alberto de Zagottis, 1018 - Jardim Anhanguera, São Paulo - SP, 04675-085","cidade":"São Paulo","lat":-23.6701,"lng":-46.69601,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L150":{"num":150,"nome":"CORUJAS","codigo":"3673786","cnpj":"49720920121-39","endereco":"Av. das Corujas, 456 - Sumarezinho, São Paulo - SP, 05442-050","cidade":"São Paulo","lat":-23.54644,"lng":-46.6965,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""},"L151":{"num":151,"nome":"J CACHOEIRAS","codigo":"3673788","cnpj":"49720920122-10","endereco":"Rua João Cachoeira, 1351 - Vila Nova Conceição, São Paulo - SP, 04535-904","cidade":"São Paulo","lat":-23.59023,"lng":-46.67606,"origem":"base","status":"pendente","dataAgendada":"","dataVisita":"","obs":""}};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth(), db = firebase.database();
+
+const COR = {visitada:'#1E6B43', agendada:'#E39A2D', vencida:'#C43E3E', pendente:'#A6ADA8'};
+const ROTULO = {visitada:'Visitada', agendada:'Agendada', vencida:'Vencida', pendente:'Pendente'};
+const SP_BOUNDS = [[-25.4,-53.2],[-19.7,-44.1]];
+
+let lojas = {}, usuario = null, editor = false, selKey = null, modo = null, marcadorTemp = null, kpiAtivo = 'todas', carregou = false;
+const $ = id => document.getElementById(id);
+const num = n => Number(n).toLocaleString('pt-BR');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hoje = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+const br = iso => iso ? iso.split('-').reverse().join('/') : '';
+const statusEf = l => (l.status === 'agendada' && l.dataAgendada && l.dataAgendada < hoje()) ? 'vencida' : (l.status || 'pendente');
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2600); }
+
+/* ---------- MAPA ---------- */
+const mapa = L.map('mapa', {zoomSnap:.5}).fitBounds(SP_BOUNDS);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO'
+}).addTo(mapa);
+fetch('https://servicodados.ibge.gov.br/api/v3/malhas/estados/35?formato=application/vnd.geo+json&qualidade=intermediaria')
+  .then(r => r.json())
+  .then(geo => { L.geoJSON(geo, {interactive:false, style:{color:'#123F28', weight:2.5, fill:true, fillColor:'#1E6B43', fillOpacity:.05}}).addTo(mapa); })
+  .catch(() => {});
+const marcadores = {};
+document.querySelectorAll('.zoom-rapido button').forEach(b => b.onclick = () => {
+  const z = b.dataset.z;
+  if (z === 'estado') mapa.fitBounds(SP_BOUNDS);
+  if (z === 'capital') mapa.setView([-23.565,-46.64], 11.5);
+  if (z === 'campinas') mapa.setView([-22.89,-47.06], 12);
+});
+mapa.on('click', e => {
+  if (modo !== 'nova') return;
+  const {lat, lng} = e.latlng;
+  $('nCoord').value = lat.toFixed(6) + ', ' + lng.toFixed(6);
+  marcarTemp(lat, lng);
+  $('avisoMapa').style.display = 'none';
+});
+function marcarTemp(lat, lng){
+  if (marcadorTemp) marcadorTemp.setLatLng([lat,lng]);
+  else marcadorTemp = L.marker([lat,lng]).addTo(mapa);
+}
+
+function desenharMarcadores(){
+  Object.keys(marcadores).forEach(k => { if (!lojas[k]) { mapa.removeLayer(marcadores[k]); delete marcadores[k]; } });
+  Object.entries(lojas).forEach(([k,l]) => {
+    const s = statusEf(l), sel = k === selKey;
+    const estilo = {radius: sel ? 11 : 7, color: sel ? '#17251C' : '#fff', weight: sel ? 3 : 1.5, fillColor: COR[s], fillOpacity: 1};
+    if (!marcadores[k]) {
+      marcadores[k] = L.circleMarker([l.lat, l.lng], estilo).addTo(mapa).on('click', () => abrirLoja(k));
+    } else {
+      marcadores[k].setLatLng([l.lat, l.lng]).setStyle(estilo);
+    }
+    marcadores[k].bindTooltip(`${l.num} · ${esc(l.nome)} (${ROTULO[s]})`, {direction:'top', offset:[0,-6]});
+    if (s === 'visitada' || sel) marcadores[k].bringToFront();
+  });
+}
+
+/* ---------- ORDENAÇÃO E FILTRO ---------- */
+const PESO = {vencida:0, agendada:1, pendente:2, visitada:3};
+function ordenar(arr){
+  return arr.sort((a,b) => {
+    const sa = statusEf(a[1]), sb = statusEf(b[1]);
+    if (sa !== sb) return PESO[sa] - PESO[sb];
+    if (sa === 'agendada' || sa === 'vencida') return (a[1].dataAgendada||'').localeCompare(b[1].dataAgendada||'');
+    if (sa === 'visitada') return (b[1].dataVisita||'').localeCompare(a[1].dataVisita||'');
+    return a[1].num - b[1].num;
+  });
+}
+function filtradas(){
+  const q = $('busca').value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const fs = $('fStatus').value, fc = $('fCidade').value;
+  return ordenar(Object.entries(lojas).filter(([k,l]) => {
+    const s = statusEf(l);
+    if (fs !== 'todas' && fs !== s) return false;
+    if (fc && l.cidade !== fc) return false;
+    if (q) {
+      const alvo = `${l.num} ${l.nome} ${l.cidade}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+      if (!alvo.includes(q)) return false;
+    }
+    return true;
+  }));
+}
+
+/* ---------- RENDER ---------- */
+function render(){
+  const todas = Object.values(lojas), t = todas.length;
+  const c = {visitada:0, agendada:0, vencida:0, pendente:0};
+  todas.forEach(l => c[statusEf(l)]++);
+  const agTotal = c.agendada + c.vencida;
+  const pct = t ? Math.round(c.visitada / t * 100) : 0;
+
+  let tit = c.visitada === 0
+    ? `Nenhuma das ${num(t)} lojas visitada ainda`
+    : `${num(c.visitada)} de ${num(t)} lojas visitadas (${pct}%)`;
+  if (c.vencida) tit += `, ${num(c.vencida)} ${c.vencida === 1 ? 'agendamento vencido' : 'agendamentos vencidos'}`;
+  else if (agTotal) tit += `, ${num(agTotal)} ${agTotal === 1 ? 'agendada' : 'agendadas'}`;
+  $('titulo').textContent = tit;
+
+  const prox = todas.filter(l => statusEf(l) === 'agendada').sort((a,b) => a.dataAgendada.localeCompare(b.dataAgendada))[0];
+  $('subtitulo').textContent = (prox ? `Próxima visita: ${prox.nome} (${prox.cidade}) em ${br(prox.dataAgendada)}. ` : 'Nenhuma visita agendada. ')
+    + `Faltam ${num(c.pendente)} lojas sem data.` + (editor ? '' : ' Modo consulta.');
+
+  // trilha
+  const ord = ordenar(Object.entries(lojas)).sort((a,b) => {
+    const o = {visitada:0, vencida:1, agendada:2, pendente:3};
+    return o[statusEf(a[1])] - o[statusEf(b[1])];
+  });
+  $('trilha').innerHTML = ord.map(([k,l]) => `<button data-k="${k}" style="background:${COR[statusEf(l)]}" title="${l.num} · ${esc(l.nome)}" aria-label="${esc(l.nome)}, ${ROTULO[statusEf(l)]}"></button>`).join('');
+  $('legTrilha').textContent = `${num(t)} lojas`;
+
+  // kpis
+  const k = [
+    ['visitada', 'Visitadas', c.visitada, COR.visitada],
+    ['agendada', 'Agendadas no prazo', c.agendada, COR.agendada],
+    ['vencida', 'Agendadas vencidas', c.vencida, c.vencida >= 3 ? COR.vencida : c.vencida >= 1 ? COR.agendada : COR.visitada],
+    ['pendente', 'Sem data', c.pendente, COR.pendente],
+  ];
+  $('kpis').innerHTML = k.map(([s,r,v,cor]) => `<button class="kpi ${kpiAtivo===s?'ativo':''}" data-s="${s}" style="color:${cor}"><b style="color:var(--tinta)">${num(v)}</b><span><i class="sinal" style="background:${cor}"></i>${r}</span></button>`).join('')
+    + `<div class="kpi" style="cursor:default"><b>${pct}%</b><span>Concluído</span></div>`;
+
+  // cidades
+  const cidades = [...new Set(todas.map(l => l.cidade))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+  const fc = $('fCidade'), atual = fc.value;
+  fc.innerHTML = '<option value="">Todas as cidades</option>' + cidades.map(ci => {
+    const n = todas.filter(l => l.cidade === ci).length;
+    return `<option value="${esc(ci)}">${esc(ci)} (${num(n)})</option>`;
+  }).join('');
+  fc.value = cidades.includes(atual) ? atual : '';
+
+  // lista
+  const lista = filtradas();
+  $('contagem').textContent = `${num(lista.length)} de ${num(t)} lojas`;
+  $('itens').innerHTML = lista.length ? lista.map(([k,l]) => {
+    const s = statusEf(l);
+    const data = s === 'visitada' ? br(l.dataVisita) : (s === 'agendada' || s === 'vencida') ? br(l.dataAgendada) : '';
+    return `<button class="item ${k===selKey?'sel':''}" data-k="${k}">
+      <i style="background:${COR[s]}"></i>
+      <span><strong>${l.num} · ${esc(l.nome)}</strong><small>${esc(l.cidade)}</small></span>
+      <span class="st" style="color:${s==='pendente'?'var(--tinta2)':COR[s]}">${ROTULO[s]}<small>${data}</small></span>
+    </button>`;
+  }).join('') : '<div class="vazio">Nenhuma loja com esses filtros. Limpe os filtros para ver todas.</div>';
+
+  desenharMarcadores();
+  $('btnLogin').textContent = editor ? 'Sair' : 'Entrar';
+  $('btnNova').disabled = !editor;
+}
+
+/* ---------- GAVETA: LOJA ---------- */
+let rascunho = null;
+function abrirLoja(k){
+  const l = lojas[k]; if (!l) return;
+  sairModoNova();
+  selKey = k; modo = 'loja';
+  rascunho = {status: l.status || 'pendente', dataAgendada: l.dataAgendada || '', dataVisita: l.dataVisita || '', obs: l.obs || ''};
+  $('gTitulo').textContent = `${l.num} · ${l.nome}`;
+  $('gSub').textContent = `${l.cidade}${l.codigo ? ' · código ' + l.codigo : ''}${l.cnpj ? ' · CNPJ ' + l.cnpj : ''}`;
+  desenharForm(k);
+  abrirGaveta();
+  mapa.flyTo([l.lat, l.lng], Math.max(mapa.getZoom(), 13), {duration:.6});
+  render();
+}
+function desenharForm(k){
+  const l = lojas[k], r = rascunho, dis = editor ? '' : 'disabled';
+  $('gCorpo').innerHTML = `
+    <div class="endereco">${esc(l.endereco)}</div>
+    <div class="links">
+      <a href="https://www.google.com/maps/dir/?api=1&destination=${l.lat},${l.lng}" target="_blank" rel="noopener">Traçar rota</a>
+      <a href="https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}" target="_blank" rel="noopener">Abrir no Google Maps</a>
+    </div>
+    <label>Status da visita</label>
+    <div class="seg" id="seg">
+      ${['pendente','agendada','visitada'].map(s => `<button type="button" data-s="${s}" aria-pressed="${r.status===s}" ${dis}>${ROTULO[s]}</button>`).join('')}
+    </div>
+    ${r.status !== 'pendente' ? `<div class="dupla">
+      <div><label for="dAg">Data agendada</label><input type="date" id="dAg" value="${r.dataAgendada}" ${dis}></div>
+      ${r.status === 'visitada' ? `<div><label for="dVi">Data da visita</label><input type="date" id="dVi" value="${r.dataVisita}" ${dis}></div>` : '<div></div>'}
+    </div>` : ''}
+    <label for="obs">Observações</label>
+    <textarea id="obs" placeholder="Pontos levantados, pendências, contato na loja" ${dis}>${esc(r.obs)}</textarea>
+    ${editor ? '' : '<div class="bloqueio">Para marcar visita, entre com seu e-mail e senha.</div>'}
+    <div class="hist" id="hist"></div>`;
+  $('seg').querySelectorAll('button').forEach(b => b.onclick = () => {
+    guardarCampos();
+    rascunho.status = b.dataset.s;
+    if (rascunho.status === 'visitada' && !rascunho.dataVisita) rascunho.dataVisita = hoje();
+    desenharForm(k);
+  });
+  $('gRodape').innerHTML = editor
+    ? `${l.origem === 'nova' ? '<button class="btn perigo" id="gExcluir">Excluir loja</button>' : '<span></span>'}<button class="btn prim" id="gSalvar">Salvar visita</button>`
+    : `<span></span><button class="btn prim" id="gEntrar">Entrar para editar</button>`;
+  if ($('gSalvar')) $('gSalvar').onclick = () => salvarVisita(k);
+  if ($('gExcluir')) $('gExcluir').onclick = () => excluirLoja(k);
+  if ($('gEntrar')) $('gEntrar').onclick = abrirLogin;
+  carregarHistorico(k);
+}
+function guardarCampos(){
+  if ($('dAg')) rascunho.dataAgendada = $('dAg').value;
+  if ($('dVi')) rascunho.dataVisita = $('dVi').value;
+  if ($('obs')) rascunho.obs = $('obs').value;
+}
+async function salvarVisita(k){
+  guardarCampos();
+  const r = rascunho, antes = lojas[k].status || 'pendente';
+  if (r.status === 'agendada' && !r.dataAgendada) return toast('Informe a data agendada');
+  if (r.status === 'visitada' && !r.dataVisita) return toast('Informe a data da visita');
+  if (r.status === 'visitada' && r.dataVisita > hoje()) return toast('A data da visita não pode ser futura');
+  const dados = {
+    status: r.status,
+    dataAgendada: r.status === 'pendente' ? '' : r.dataAgendada,
+    dataVisita: r.status === 'visitada' ? r.dataVisita : '',
+    obs: r.obs.trim(),
+    atualizadoEm: firebase.database.ServerValue.TIMESTAMP,
+    atualizadoPor: usuario.email
+  };
+  try {
+    await db.ref('lojas/' + k).update(dados);
+    await db.ref('historico').push({key:k, de:antes, para:r.status, data: r.status==='visitada'?r.dataVisita:r.dataAgendada, em: firebase.database.ServerValue.TIMESTAMP, por: usuario.email});
+    toast('Visita salva');
+    fecharGaveta();
+  } catch(e){ toast('Não salvou: ' + (e.code || e.message)); }
+}
+function carregarHistorico(k){
+  db.ref('historico').orderByChild('key').equalTo(k).limitToLast(5).once('value').then(s => {
+    const h = []; s.forEach(c => { h.push(c.val()); });
+    if (!h.length || selKey !== k || !$('hist')) return;
+    $('hist').innerHTML = '<h3>Últimas alterações</h3>' + h.reverse().map(x =>
+      `<div>${new Date(x.em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}: ${ROTULO[x.de]||x.de} para ${ROTULO[x.para]||x.para}${x.data ? ' (' + br(x.data) + ')' : ''}, por ${esc(x.por)}</div>`).join('');
+  }).catch(() => {});
+}
+async function excluirLoja(k){
+  const l = lojas[k];
+  if (!confirm(`Excluir a loja ${l.num} · ${l.nome}? Só lojas incluídas manualmente podem ser excluídas.`)) return;
+  try { await db.ref('lojas/' + k).remove(); toast('Loja excluída'); fecharGaveta(); }
+  catch(e){ toast('Não excluiu: ' + (e.code || e.message)); }
+}
+
+/* ---------- GAVETA: NOVA LOJA ---------- */
+function abrirNova(){
+  if (!editor) return abrirLogin();
+  selKey = null; modo = 'nova';
+  $('gTitulo').textContent = 'Incluir loja';
+  $('gSub').textContent = 'Ela entra no mapa como pendente.';
+  $('gCorpo').innerHTML = `
+    <div class="dupla">
+      <div><label for="nNum">Nº da loja</label><input id="nNum" type="number" min="1" inputmode="numeric"></div>
+      <div><label for="nCod">Código</label><input id="nCod"></div>
+    </div>
+    <label for="nNome">Nome da loja</label><input id="nNome" placeholder="Ex.: Vila Madalena">
+    <label for="nCnpj">CNPJ</label><input id="nCnpj">
+    <label for="nEnd">Endereço completo</label><input id="nEnd" placeholder="Rua, número, bairro, cidade, CEP">
+    <label for="nCid">Cidade</label><input id="nCid" list="listaCid">
+    <datalist id="listaCid">${[...new Set(Object.values(lojas).map(l=>l.cidade))].sort().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+    <label for="nCoord">Coordenadas (latitude, longitude)</label>
+    <input id="nCoord" placeholder="-23.550520, -46.633308">
+    <div class="dica">No Google Maps, clique com o botão direito na loja e copie o primeiro item. Ou clique no ponto certo do mapa.</div>
+    <div class="erro" id="nErro"></div>`;
+  $('gRodape').innerHTML = '<button class="btn" id="nCancelar" style="border-color:var(--linha)">Cancelar</button><button class="btn prim" id="nSalvar">Incluir loja</button>';
+  $('nCancelar').onclick = fecharGaveta;
+  $('nSalvar').onclick = salvarNova;
+  $('nCoord').addEventListener('change', () => { const c = lerCoord($('nCoord').value); if (c) { marcarTemp(c[0], c[1]); mapa.setView(c, 15); } });
+  $('avisoMapa').style.display = 'block';
+  abrirGaveta();
+  render();
+}
+function lerCoord(txt){
+  const m = String(txt).replace(/\s/g,'').match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = +m[1], lng = +m[2];
+  if (lat < SP_BOUNDS[0][0] || lat > SP_BOUNDS[1][0] || lng < SP_BOUNDS[0][1] || lng > SP_BOUNDS[1][1]) return null;
+  return [lat, lng];
+}
+async function salvarNova(){
+  const n = parseInt($('nNum').value, 10), nome = $('nNome').value.trim().toUpperCase().replace(/\s+/g,' ');
+  const cid = $('nCid').value.trim().replace(/\s+/g,' '), coord = lerCoord($('nCoord').value);
+  const err = msg => { $('nErro').textContent = msg; };
+  if (!n || n < 1) return err('Informe o número da loja.');
+  if (lojas['L' + n]) return err(`Já existe a loja ${n} (${lojas['L'+n].nome}).`);
+  if (!nome) return err('Informe o nome da loja.');
+  if (!cid) return err('Informe a cidade.');
+  if (!coord) return err('Coordenadas inválidas ou fora do estado de SP. Use o formato -23.55, -46.63.');
+  const nova = {num:n, nome, codigo:$('nCod').value.trim(), cnpj:$('nCnpj').value.trim(), endereco:$('nEnd').value.trim().replace(/\s+/g,' '),
+    cidade:cid, lat:+coord[0].toFixed(6), lng:+coord[1].toFixed(6), origem:'nova', status:'pendente', dataAgendada:'', dataVisita:'', obs:'',
+    criadoEm: firebase.database.ServerValue.TIMESTAMP, criadoPor: usuario.email};
+  try {
+    await db.ref('lojas/L' + n).set(nova);
+    toast('Loja incluída');
+    fecharGaveta();
+  } catch(e){ err('Não salvou: ' + (e.code || e.message)); }
+}
+function sairModoNova(){
+  $('avisoMapa').style.display = 'none';
+  if (marcadorTemp) { mapa.removeLayer(marcadorTemp); marcadorTemp = null; }
+}
+
+/* ---------- GAVETA GERAL ---------- */
+function abrirGaveta(){ $('gaveta').classList.add('aberta'); $('gaveta').setAttribute('aria-hidden','false'); }
+function fecharGaveta(){
+  $('gaveta').classList.remove('aberta'); $('gaveta').setAttribute('aria-hidden','true');
+  sairModoNova(); selKey = null; modo = null; render();
+}
+$('gFechar').onclick = fecharGaveta;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharGaveta(); $('mLogin').classList.remove('aberto'); } });
+
+/* ---------- EVENTOS ---------- */
+$('itens').onclick = e => { const b = e.target.closest('.item'); if (b) abrirLoja(b.dataset.k); };
+$('trilha').onclick = e => { const b = e.target.closest('button'); if (b) abrirLoja(b.dataset.k); };
+$('kpis').onclick = e => {
+  const b = e.target.closest('button.kpi'); if (!b) return;
+  kpiAtivo = kpiAtivo === b.dataset.s ? 'todas' : b.dataset.s;
+  $('fStatus').value = kpiAtivo; render();
+};
+$('busca').oninput = render;
+$('fStatus').onchange = () => { kpiAtivo = $('fStatus').value; render(); };
+$('fCidade').onchange = () => {
+  render();
+  const v = $('fCidade').value;
+  const pts = Object.values(lojas).filter(l => !v || l.cidade === v).map(l => [l.lat, l.lng]);
+  if (v && pts.length) mapa.fitBounds(pts, {padding:[40,40], maxZoom:14}); else if (!v) mapa.fitBounds(SP_BOUNDS);
+};
+$('limpar').onclick = () => { $('busca').value=''; $('fStatus').value='todas'; $('fCidade').value=''; kpiAtivo='todas'; render(); mapa.fitBounds(SP_BOUNDS); };
+$('btnNova').onclick = abrirNova;
+$('btnCsv').onclick = () => {
+  const cab = ['Nº loja','Loja','Cidade','Código','CNPJ','Endereço','Status','Data agendada','Data visita','Observações','Latitude','Longitude'];
+  const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => [l.num,l.nome,l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),l.obs,String(l.lat).replace('.',','),String(l.lng).replace('.',',')]);
+  const csv = '\ufeff' + [cab, ...linhas].map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = `visitas_lojas_oba_${hoje()}.csv`; a.click();
+};
+
+/* ---------- LOGIN ---------- */
+function abrirLogin(){ $('lErro').textContent=''; $('mLogin').classList.add('aberto'); setTimeout(() => $('lEmail').focus(), 50); }
+$('btnLogin').onclick = async () => {
+  if (editor) { await auth.signOut(); toast('Você saiu. Painel em modo consulta.'); }
+  else abrirLogin();
+};
+$('lCancelar').onclick = () => $('mLogin').classList.remove('aberto');
+$('formLogin').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    await auth.signInWithEmailAndPassword($('lEmail').value.trim(), $('lSenha').value);
+    $('mLogin').classList.remove('aberto'); $('lSenha').value=''; toast('Edição liberada');
+  } catch(err){
+    $('lErro').textContent = ['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-login-credentials'].includes(err.code)
+      ? 'E-mail ou senha incorretos.' : 'Não entrou: ' + err.code;
+  }
+};
+
+let refLojas = null;
+auth.onAuthStateChanged(u => {
+  if (!u) { auth.signInAnonymously().catch(e => { $('titulo').textContent = 'Sem acesso ao banco: ' + e.code; }); return; }
+  usuario = u; editor = !u.isAnonymous;
+  if (refLojas) refLojas.off();
+  refLojas = db.ref('lojas');
+  refLojas.on('value', snap => {
+    const v = snap.val();
+    if (!v) {
+      lojas = JSON.parse(JSON.stringify(SEED));
+      if (editor) db.ref('lojas').transaction(atual => atual === null ? SEED : undefined).then(() => toast('Base com 75 lojas gravada no banco'));
+    } else lojas = v;
+    carregou = true;
+    if (selKey && !lojas[selKey]) fecharGaveta();
+        render();
+    if (selKey && modo === 'loja') { guardarCampos(); desenharForm(selKey); }
+  }, e => { $('titulo').textContent = 'Sem acesso ao banco: ' + e.code; });
+});
+</script>
+</body>
+</html>
