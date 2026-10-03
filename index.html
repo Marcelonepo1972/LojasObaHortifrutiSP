@@ -121,6 +121,29 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
 .toast{position:fixed;z-index:1200;left:50%;bottom:20px;transform:translateX(-50%) translateY(80px);background:var(--verde-esc);color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;transition:transform .2s}
 .toast.on{transform:translateX(-50%) translateY(0)}
 
+.abas{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--linha);background:#FAFCF8}
+.abas button{border:0;background:none;padding:12px;font-weight:800;color:var(--tinta2);border-bottom:3px solid transparent}
+.abas button[aria-selected="true"]{color:var(--verde-esc);border-bottom-color:var(--verde)}
+#painelRot,#painelLojas{display:flex;flex-direction:column;min-height:0;flex:1;overflow-y:auto}
+#painelLojas{overflow:hidden}
+.grupo{padding:12px 14px 6px;font-size:12.5px;font-weight:800;color:var(--verde);background:#FAFCF8;border-bottom:1px solid var(--linha)}
+.rot{display:grid;grid-template-columns:5px 1fr auto;gap:12px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--linha);background:none;padding:10px 14px 10px 0;align-items:center}
+.rot:hover{background:#F4F9F0}
+.rot i{align-self:stretch;border-radius:0 3px 3px 0}
+.rot strong{display:block;font-weight:800}
+.rot small{color:var(--tinta2);font-size:12.5px}
+.rot .st{font-size:12.5px;font-weight:700;text-align:right;white-space:nowrap}
+.mini{display:block;height:5px;border-radius:3px;background:var(--linha);margin-top:5px;overflow:hidden;max-width:160px}
+.mini b{display:block;height:100%;background:var(--verde)}
+.rot-topo{padding:12px 14px 14px;border-bottom:1px solid var(--linha);background:linear-gradient(135deg,#F1F8EC,#FFF4E3)}
+.rot-topo h3{font-family:var(--f-titulo);font-weight:800;font-size:26px;line-height:1.05;margin:6px 0 2px;color:var(--verde-esc)}
+.rot-topo p{margin:0;color:var(--tinta2);font-size:13px}
+.voltar{border:0;background:none;padding:0;color:var(--verde);font-weight:800;font-size:13px}
+.voltar::before{content:"‹ "}
+.rot-acoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.rot-acoes input{padding:7px 10px;border:1px solid var(--linha);border-radius:10px;background:#fff}
+.rot-acoes .btn{text-decoration:none;padding:7px 14px;font-size:14px}
+.rot-topo .dica{margin-top:8px}
 @media (max-width:860px){
   .app{display:block;height:auto}
   html,body{height:auto}
@@ -133,6 +156,7 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
   .mapa-box{height:58vh;margin:0 12px 12px}
   .lista{margin:0 12px 12px}
   #itens{overflow:visible}
+  #painelRot,#painelLojas{overflow:visible}
   .gaveta{top:auto;bottom:0;height:88vh;width:100%;border-radius:18px 18px 0 0;transform:translateY(105%)}
   .gaveta.aberta{transform:none}
 }
@@ -175,6 +199,12 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
       <div class="aviso-mapa" id="avisoMapa">Clique no mapa onde fica a loja</div>
     </div>
     <section class="lista">
+      <div class="abas" role="tablist">
+        <button data-aba="roteiros" role="tab">Roteiros</button>
+        <button data-aba="lojas" role="tab">Lojas</button>
+      </div>
+      <div id="painelRot"></div>
+      <div id="painelLojas">
       <div class="filtros">
         <input id="busca" type="search" placeholder="Buscar por nome, número ou cidade">
         <select id="fStatus">
@@ -188,6 +218,7 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
       </div>
       <div class="cont"><span id="contagem"></span><button id="limpar">Limpar filtros</button></div>
       <div id="itens"></div>
+      </div>
     </section>
   </div>
 </div>
@@ -269,8 +300,9 @@ const xs = contornoPx.map(p => p[0]), ys = contornoPx.map(p => p[1]);
 const EST = {x0:Math.min(...xs), x1:Math.max(...xs), y0:Math.min(...ys), y1:Math.max(...ys)};
 svg.innerHTML = `<rect x="-5000" y="-5000" width="12000" height="12000" fill="#EAF2E6"/>
   <path d="M${contornoPx.map(p => p[0].toFixed(1)+','+p[1].toFixed(1)).join('L')}Z" fill="#FFFFFF" stroke="#1F8A2E" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-  <g id="gRotulos"></g><g id="gPinos"></g><g id="gNomes"></g><g id="gTemp"></g>`;
-const gNomes = svg.querySelector('#gNomes'), gPinos = svg.querySelector('#gPinos'), gRot = svg.querySelector('#gRotulos'), gTemp = svg.querySelector('#gTemp');
+  <g id="gRotulos"></g><g id="gRota"></g><g id="gPinos"></g><g id="gNomes"></g><g id="gTemp"></g>`;
+const gRota = svg.querySelector('#gRota'), gNomes = svg.querySelector('#gNomes'), gPinos = svg.querySelector('#gPinos'), gRot = svg.querySelector('#gRotulos'), gTemp = svg.querySelector('#gTemp');
+let naEstado = true;
 const vista = {cx:(EST.x0+EST.x1)/2, cy:(EST.y0+EST.y1)/2, w:EST.x1-EST.x0};
 const ESTADO_W = EST.x1 - EST.x0;
 const escalaTela = () => vista.w / Math.max(svg.clientWidth, 1);
@@ -287,12 +319,13 @@ function encaixar(x0, y0, x1, y1, folga = 1.12){
 }
 const mapa = {
   fitBounds(b){ /* aceita [[lat,lng],[lat,lng]] ou lista de pontos */
-    if (b === SP_BOUNDS) return encaixar(EST.x0, EST.y0, EST.x1, EST.y1, 1.06);
+    if (b === SP_BOUNDS) { naEstado = true; return encaixar(EST.x0, EST.y0, EST.x1, EST.y1, 1.06); }
+    naEstado = false;
     const p = b.map(([la, ln]) => PX(la, ln)), px = p.map(q => q[0]), py = p.map(q => q[1]);
     encaixar(Math.min(...px), Math.min(...py), Math.max(...px), Math.max(...py), 1.4);
     if (vista.w < ESTADO_W / 60) { vista.w = ESTADO_W / 60; aplicarVista(); }
   },
-  setView([la, ln], fator){ const [x, y] = PX(la, ln); vista.cx = x; vista.cy = y; vista.w = ESTADO_W / fator; aplicarVista(); },
+  setView([la, ln], fator){ naEstado = false; const [x, y] = PX(la, ln); vista.cx = x; vista.cy = y; vista.w = ESTADO_W / fator; aplicarVista(); },
   getZoom(){ return ESTADO_W / vista.w; },
   flyTo(ll, fator){ this.setView(ll, fator); },
   invalidateSize(){ aplicarVista(); }
@@ -310,8 +343,9 @@ function atualizarTamanhos(){
   const s = escalaTela(), z = mapa.getZoom();
   gPinos.querySelectorAll('circle').forEach(c => c.setAttribute('r', (+c.dataset.r) * s));
   gTemp.querySelectorAll('circle').forEach(c => c.setAttribute('r', 9 * s));
+  gPinos.querySelectorAll('text.nordem').forEach(t => t.setAttribute('font-size', 11 * s));
   gRot.querySelectorAll('text').forEach(t => {
-    const ver = z < 6 && (z >= 3 || t.dataset.fixo === '1');
+    const ver = !rotSel && z < 6 && (z >= 3 || t.dataset.fixo === '1');
     t.style.display = ver ? '' : 'none';
     t.setAttribute('font-size', 12 * s);
     t.setAttribute('y', +t.dataset.y - 12 * s);
@@ -320,47 +354,88 @@ function atualizarTamanhos(){
 }
 function desenharMarcadores(){
   desenharRotulos();
+  /* linhas dos roteiros */
+  gRota.innerHTML = ROTEIROS.map(r => {
+    const ps = lojasDoRoteiro(r.id).map(([k, l]) => PX(l.lat, l.lng));
+    if (ps.length < 2) return '';
+    const sel = r.id === rotSel;
+    if (rotSel && !sel) return '';
+    const d = 'M' + ps.map(p => p[0] + ',' + p[1]).join('L');
+    return `<path d="${d}" fill="none" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke" data-r="${r.id}" style="cursor:pointer"/>
+      <path d="${d}" fill="none" stroke="${sel ? '#0F4D1A' : '#9AAE9C'}" stroke-width="${sel ? 3 : 1.6}" ${sel ? 'stroke-dasharray="7 5"' : ''} stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+  }).join('');
+  const naRota = rotSel ? new Set(lojasDoRoteiro(rotSel).map(x => x[0])) : null;
+  const ordem = rotSel ? Object.fromEntries(lojasDoRoteiro(rotSel).map(([k], i) => [k, i + 1])) : {};
   const ord = Object.entries(lojas).sort((a, b) => {
     const o = {pendente:0, agendada:1, vencida:2, visitada:3};
-    return (a[0] === selKey) - (b[0] === selKey) || o[statusEf(a[1])] - o[statusEf(b[1])];
+    const ra = naRota ? naRota.has(a[0]) : false, rb = naRota ? naRota.has(b[0]) : false;
+    return (ra - rb) || (a[0] === selKey) - (b[0] === selKey) || o[statusEf(a[1])] - o[statusEf(b[1])];
   });
   gPinos.innerHTML = ord.map(([k, l]) => {
     const s = statusEf(l), sel = k === selKey, [x, y] = PX(l.lat, l.lng);
-    return `<circle data-k="${k}" data-r="${sel ? 11 : s === 'pendente' ? 5 : 8}" cx="${x}" cy="${y}" fill="${COR[s]}" stroke="${sel ? '#17251C' : '#fff'}" stroke-width="${sel ? 3 : 1.5}" vector-effect="non-scaling-stroke" style="cursor:pointer"><title>${l.num} · ${esc(l.nome)} (${ROTULO[s]})</title></circle>`;
+    if (naRota && !naRota.has(k)) {
+      return `<circle data-k="${k}" data-r="4" cx="${x}" cy="${y}" fill="${COR[s]}" opacity=".35" style="cursor:pointer"><title>${l.num} · ${esc(l.nome)}</title></circle>`;
+    }
+    if (naRota) {
+      return `<g data-k="${k}" style="cursor:pointer"><circle data-k="${k}" data-r="${sel ? 14 : 12}" cx="${x}" cy="${y}" fill="${COR[s]}" stroke="${sel ? '#17251C' : '#fff'}" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+        <text data-k="${k}" class="nordem" data-x="${x}" data-y="${y}" x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="#fff" font-weight="800">${ordem[k]}</text><title>${ordem[k]} · ${esc(l.nome)}</title></g>`;
+    }
+    return `<circle data-k="${k}" data-r="${sel ? 11 : s === 'pendente' ? 5 : 7}" cx="${x}" cy="${y}" fill="${COR[s]}" stroke="${sel ? '#17251C' : '#fff'}" stroke-width="${sel ? 3 : 1.5}" vector-effect="non-scaling-stroke" style="cursor:pointer"><title>${l.num} · ${esc(l.nome)} (${ROTULO[s]})</title></circle>`;
   }).join('');
   atualizarTamanhos();
 }
 
-/* etiquetas: só visitadas e agendadas, com data, sem sobrepor */
+/* cards fora do mapa com linha até a loja (só com roteiro aberto) */
+const CARD_W = 178, CARD_H = 42, CARD_GAP = 8, CARD_MARGEM = 12;
+const telaLarga = () => svg.clientWidth >= 700;
+function enquadrarRoteiro(){
+  const ps = lojasDoRoteiro(rotSel).map(([k, l]) => PX(l.lat, l.lng));
+  if (!ps.length) return;
+  const xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const cw = Math.max(svg.clientWidth, 1), ch = Math.max(svg.clientHeight, 1);
+  const lateral = telaLarga() ? CARD_W + CARD_MARGEM + 60 : 40;
+  const topoPad = 70, basePad = telaLarga() ? 80 : 120;
+  const livreW = Math.max(cw - 2 * lateral, 120), livreH = Math.max(ch - topoPad - basePad, 120);
+  const rw = Math.max(x1 - x0, ESTADO_W / 300), rh = Math.max(y1 - y0, ESTADO_W / 300);
+  vista.w = Math.max(rw * cw / livreW, rh * cw / livreH);
+  vista.cx = (x0 + x1) / 2; vista.cy = (y0 + y1) / 2 + (basePad - topoPad) / 2 * (vista.w / cw);
+  aplicarVista();
+}
 function posicionarEtiquetas(){
+  if (!rotSel || !telaLarga()) { gNomes.innerHTML = ''; return; }
   const s = escalaTela(), cw = svg.clientWidth, ch = svg.clientHeight;
   const vx0 = vista.cx - vista.w/2, vy0 = vista.cy - (vista.w * ch / cw)/2;
-  const PRI = {vencida:0, agendada:1, visitada:2};
-  const alvos = Object.entries(lojas).filter(([k, l]) => statusEf(l) !== 'pendente' || k === selKey)
-    .map(([k, l]) => { const [x, y] = PX(l.lat, l.lng); return {k, l, s:statusEf(l), sx:(x - vx0)/s, sy:(y - vy0)/s, x, y}; })
-    .filter(a => a.sx > -40 && a.sx < cw + 40 && a.sy > -40 && a.sy < ch + 40)
-    .sort((a, b) => (b.k === selKey) - (a.k === selKey) || PRI[a.s] - PRI[b.s]
-      || (a.s === 'visitada' ? (b.l.dataVisita||'').localeCompare(a.l.dataVisita||'') : (a.l.dataAgendada||'').localeCompare(b.l.dataAgendada||'')));
-  const ocupado = [], sai = [];
-  const bate = r => ocupado.some(o => r.x < o.x + o.w + 3 && r.x + r.w + 3 > o.x && r.y < o.y + o.h + 3 && r.y + r.h + 3 > o.y);
-  const curto = iso => iso ? iso.slice(8,10) + '/' + iso.slice(5,7) : '';
-  for (const a of alvos) {
-    const txt1 = a.l.nome;
-    const txt2 = a.s === 'visitada' ? `Visitada ${curto(a.l.dataVisita)}` : a.s === 'pendente' ? 'Sem data' : `${a.s === 'vencida' ? 'Vencida' : 'Agendada'} ${curto(a.l.dataAgendada)}`;
-    const w = Math.max(txt1.length * 7.6, txt2.length * 7.2) + 18, h = 34, d = 12;
-    const cands = [[a.sx + d, a.sy - h/2], [a.sx - d - w, a.sy - h/2], [a.sx - w/2, a.sy - d - h], [a.sx - w/2, a.sy + d],
-                   [a.sx + d, a.sy - h - 2], [a.sx + d, a.sy + 2], [a.sx - d - w, a.sy - h - 2], [a.sx - d - w, a.sy + 2]];
-    const c = cands.map(([x, y]) => ({x, y, w, h})).find(r => !bate(r));
-    if (!c) continue;
-    ocupado.push(c);
-    const cor = COR[a.s], X = vx0 + c.x * s, Y = vy0 + c.y * s;
-    sai.push(`<g data-k="${a.k}" style="cursor:pointer">
-      <rect data-k="${a.k}" x="${X}" y="${Y}" width="${w*s}" height="${h*s}" rx="${4*s}" fill="#fff" stroke="${cor}" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
-      <rect data-k="${a.k}" x="${X}" y="${Y}" width="${4*s}" height="${h*s}" fill="${cor}"/>
-      <text data-k="${a.k}" x="${X + 10*s}" y="${Y + 14*s}" font-size="${11.5*s}" font-weight="600" fill="#17251C">${esc(txt1)}</text>
-      <text data-k="${a.k}" x="${X + 10*s}" y="${Y + 27*s}" font-size="${11*s}" font-weight="600" fill="${a.s === 'agendada' ? '#B36200' : cor}">${txt2}</text>
-    </g>`);
-  }
+  const itens = lojasDoRoteiro(rotSel).map(([k, l], i) => { const [x, y] = PX(l.lat, l.lng); return {k, l, i, st:statusEf(l), sx:(x - vx0)/s, sy:(y - vy0)/s}; });
+  const porX = [...itens].sort((a, b) => a.sx - b.sx);
+  const meio = Math.ceil(porX.length / 2);
+  const colunas = [porX.slice(0, meio), porX.slice(meio)];
+  const topo = 56, base = ch - 56, curto = iso => iso ? iso.slice(8,10) + '/' + iso.slice(5,7) : '';
+  const sai = [];
+  colunas.forEach((col, ci) => {
+    col.sort((a, b) => a.sy - b.sy);
+    let ys = col.map(a => a.sy - CARD_H/2);
+    for (let j = 0; j < ys.length; j++) ys[j] = Math.max(ys[j], j ? ys[j-1] + CARD_H + CARD_GAP : topo);
+    const excesso = ys.length ? ys[ys.length - 1] + CARD_H - base : 0;
+    if (excesso > 0) { ys[ys.length - 1] -= excesso; for (let j = ys.length - 2; j >= 0; j--) ys[j] = Math.min(ys[j], ys[j+1] - CARD_H - CARD_GAP); }
+    const cx = ci === 0 ? CARD_MARGEM : cw - CARD_MARGEM - CARD_W;
+    col.forEach((a, j) => {
+      const cy = ys[j], cor = COR[a.st];
+      const ax = ci === 0 ? cx + CARD_W : cx, ay = cy + CARD_H/2;
+      const meioX = ci === 0 ? ax + 18 : ax - 18;
+      const txt2 = a.st === 'visitada' ? `Visitada ${curto(a.l.dataVisita)}` : a.st === 'pendente' ? 'A visitar' : `${a.st === 'vencida' ? 'Vencida' : 'Agendada'} ${curto(a.l.dataAgendada)}`;
+      const nome = a.l.nome.length > 19 ? a.l.nome.slice(0, 18) + '…' : a.l.nome;
+      const S = (x, y) => `${vx0 + x * s},${vy0 + y * s}`;
+      sai.push(`<g data-k="${a.k}" style="cursor:pointer">
+        <polyline points="${S(ax, ay)} ${S(meioX, ay)} ${S(a.sx, a.sy)}" fill="none" stroke="${cor}" stroke-width="1.4" vector-effect="non-scaling-stroke" pointer-events="none"/>
+        <rect data-k="${a.k}" x="${vx0 + cx*s}" y="${vy0 + cy*s}" width="${CARD_W*s}" height="${CARD_H*s}" rx="${9*s}" fill="#fff" stroke="${cor}" stroke-width="1.3" vector-effect="non-scaling-stroke"/>
+        <circle data-k="${a.k}" cx="${vx0 + (cx + 18)*s}" cy="${vy0 + (cy + CARD_H/2)*s}" r="${11*s}" fill="${cor}"/>
+        <text data-k="${a.k}" x="${vx0 + (cx + 18)*s}" y="${vy0 + (cy + CARD_H/2)*s}" text-anchor="middle" dominant-baseline="central" font-size="${11*s}" font-weight="800" fill="#fff">${a.i + 1}</text>
+        <text data-k="${a.k}" x="${vx0 + (cx + 36)*s}" y="${vy0 + (cy + 17)*s}" font-size="${12*s}" font-weight="700" fill="#173B1F">${esc(nome)}</text>
+        <text data-k="${a.k}" x="${vx0 + (cx + 36)*s}" y="${vy0 + (cy + 32)*s}" font-size="${11*s}" font-weight="700" fill="${a.st === 'agendada' ? '#B36200' : a.st === 'pendente' ? '#5B6B5E' : cor}">${txt2}</text>
+      </g>`);
+    });
+  });
   gNomes.innerHTML = sai.join('');
 }
 function marcarTemp(lat, lng){
@@ -375,6 +450,7 @@ const ponteiros = new Map(); let arrasto = null, moveu = false, pinca = null;
 const pontoSvg = (cx, cy) => { const r = svg.getBoundingClientRect(), s = escalaTela(), h = vista.w * r.height / r.width;
   return [vista.cx - vista.w/2 + (cx - r.left) * s, vista.cy - h/2 + (cy - r.top) * s]; };
 function zoomEm(cx, cy, f){
+  naEstado = false;
   const [x, y] = pontoSvg(cx, cy);
   const nw = Math.min(Math.max(vista.w / f, ESTADO_W / 400), ESTADO_W * 1.6), k = nw / vista.w;
   vista.cx = x + (vista.cx - x) * k; vista.cy = y + (vista.cy - y) * k; vista.w = nw; aplicarVista();
@@ -395,7 +471,7 @@ svg.addEventListener('pointermove', e => {
   if (!arrasto) return;
   const dx = e.clientX - arrasto.x, dy = e.clientY - arrasto.y;
   if (Math.abs(dx) + Math.abs(dy) > 4) moveu = true;
-  if (moveu) { const s = escalaTela(); vista.cx = arrasto.cx - dx * s; vista.cy = arrasto.cy - dy * s; aplicarVista(); }
+  if (moveu) { naEstado = false; const s = escalaTela(); vista.cx = arrasto.cx - dx * s; vista.cy = arrasto.cy - dy * s; aplicarVista(); }
 });
 function soltar(e){
   if (!ponteiros.has(e.pointerId)) return;
@@ -404,6 +480,7 @@ function soltar(e){
   if (arrasto && !moveu && e.type === 'pointerup') {
     const alvo = arrasto.alvo;
     if (alvo && alvo.dataset && alvo.dataset.k) abrirLoja(alvo.dataset.k);
+    else if (alvo && alvo.dataset && alvo.dataset.r) selecionarRoteiro(alvo.dataset.r);
     else if (modo === 'nova') {
       const [x, y] = pontoSvg(e.clientX, e.clientY), [lat, lng] = LL(x, y);
       $('nCoord').value = lat.toFixed(6) + ', ' + lng.toFixed(6);
@@ -416,11 +493,126 @@ svg.addEventListener('pointerup', soltar);
 svg.addEventListener('pointercancel', soltar);
 document.querySelectorAll('.zoom-rapido button').forEach(b => b.onclick = () => {
   const z = b.dataset.z;
-  if (z === 'estado') mapa.fitBounds(SP_BOUNDS);
+  if (z === 'estado') { rotSel = null; render(); mapa.fitBounds(SP_BOUNDS); }
   if (z === 'capital') mapa.setView([-23.575, -46.66], 16);
   if (z === 'campinas') mapa.setView([-22.885, -47.06], 18);
 });
-new ResizeObserver(() => aplicarVista()).observe(svg);
+new ResizeObserver(() => { if (rotSel) enquadrarRoteiro(); else if (naEstado) mapa.fitBounds(SP_BOUNDS); else aplicarVista(); }).observe(svg);
+
+
+/* ---------- ROTEIROS ---------- */
+const ROTEIROS = [
+  {id:'leste1', nome:'Leste 1', grupo:'Capital', lojas:[14,9,71,34,72,29]},
+  {id:'norte', nome:'Norte', grupo:'Capital', lojas:[15,24,25,123]},
+  {id:'centro', nome:'Centro', grupo:'Capital', lojas:[36,81,148,32,143,135,12]},
+  {id:'oeste', nome:'Oeste', grupo:'Capital', lojas:[43,150,41,11,37]},
+  {id:'itaim', nome:'Itaim e Moema', grupo:'Capital', lojas:[74,151,139,147,146,13]},
+  {id:'sul1', nome:'Sul 1', grupo:'Capital', lojas:[19,55,56,142]},
+  {id:'sul2', nome:'Sul 2', grupo:'Capital', lojas:[40,39,149]},
+  {id:'abc', nome:'ABC', grupo:'Grande SP', lojas:[42,67,144]},
+  {id:'oestemetro', nome:'Oeste metropolitano', grupo:'Grande SP', lojas:[88,69,64]},
+  {id:'cpscentro', nome:'Campinas Centro', grupo:'Campinas', lojas:[21,3,1,23,73,75]},
+  {id:'cpssul', nome:'Campinas Sul', grupo:'Campinas', lojas:[5,17,140]},
+  {id:'cpsnorte', nome:'Campinas Norte e Leste', grupo:'Campinas', lojas:[121,33,31]},
+  {id:'americana', nome:'Americana a Rio Claro', grupo:'Interior e litoral', lojas:[6,108,141,30]},
+  {id:'sorocabana', nome:'Sorocabana', grupo:'Interior e litoral', lojas:[104,80,26,79]},
+  {id:'jundiai', nome:'Jundiaí', grupo:'Interior e litoral', lojas:[57,63,87]},
+  {id:'mogiana', nome:'Mogiana', grupo:'Interior e litoral', lojas:[136,38,65,127]},
+  {id:'noroeste', nome:'Noroeste', grupo:'Interior e litoral', lojas:[122,86,134]},
+  {id:'baixada', nome:'Baixada', grupo:'Interior e litoral', lojas:[76,145]},
+  {id:'vale', nome:'Vale', grupo:'Interior e litoral', lojas:[35,128]}
+];
+const ROT_POR_NUM = {}; ROTEIROS.forEach(r => r.lojas.forEach(n => ROT_POR_NUM[n] = r.id));
+const ROT_ID = Object.fromEntries(ROTEIROS.map(r => [r.id, r]));
+const rotDe = l => l.roteiro || ROT_POR_NUM[l.num] || '';
+let rotSel = null, aba = 'roteiros';
+function lojasDoRoteiro(id){
+  const r = ROT_ID[id]; if (!r) return [];
+  const base = r.lojas.map(n => ['L' + n, lojas['L' + n]]).filter(x => x[1] && rotDe(x[1]) === id);
+  const extra = Object.entries(lojas).filter(([k, l]) => rotDe(l) === id && !r.lojas.includes(l.num)).sort((a, b) => a[1].num - b[1].num);
+  return [...base, ...extra];
+}
+const COR_ROT = {concluido:'#1F8A2E', vencido:'#D93A2B', andamento:'#F28C00', pendente:'#B4BBB5'};
+function resumoRot(id){
+  const ls = lojasDoRoteiro(id), n = ls.length;
+  const st = ls.map(([k, l]) => statusEf(l));
+  const v = st.filter(s => s === 'visitada').length;
+  const ag = ls.filter(([k, l]) => ['agendada','vencida'].includes(statusEf(l))).map(([k, l]) => l.dataAgendada).sort();
+  const vis = ls.filter(([k, l]) => statusEf(l) === 'visitada').map(([k, l]) => l.dataVisita).sort();
+  const estado = n && v === n ? 'concluido' : st.includes('vencida') ? 'vencido' : (v || ag.length) ? 'andamento' : 'pendente';
+  return {n, v, estado, proxData: ag[0] || '', ultVisita: vis[vis.length - 1] || ''};
+}
+function rotaGoogle(id){
+  const ls = lojasDoRoteiro(id).map(x => x[1]);
+  const alvo = ls.filter(l => statusEf(l) !== 'visitada');
+  const usar = alvo.length ? alvo : ls;
+  if (!usar.length) return '#';
+  const ll = l => `${l.lat},${l.lng}`;
+  const dest = usar[usar.length - 1], meio = usar.slice(0, -1);
+  return `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${ll(dest)}` + (meio.length ? `&waypoints=${encodeURIComponent(meio.map(ll).join('|'))}` : '');
+}
+function selecionarRoteiro(id){
+  rotSel = id; aba = 'roteiros';
+  if (modo) fecharGaveta();
+  render();
+  enquadrarRoteiro();
+}
+function sairRoteiro(){ rotSel = null; render(); mapa.fitBounds(SP_BOUNDS); }
+async function agendarRoteiro(id){
+  const data = $('rData').value;
+  if (!data) return toast('Escolha a data do roteiro');
+  if (data < hoje() && !confirm('A data escolhida já passou. Agendar mesmo assim?')) return;
+  const alvo = lojasDoRoteiro(id).filter(([k, l]) => statusEf(l) !== 'visitada');
+  if (!alvo.length) return toast('Todas as lojas desse roteiro já foram visitadas');
+  const up = {};
+  alvo.forEach(([k, l]) => {
+    up[`lojas/${k}/status`] = 'agendada'; up[`lojas/${k}/dataAgendada`] = data;
+    up[`lojas/${k}/atualizadoEm`] = firebase.database.ServerValue.TIMESTAMP; up[`lojas/${k}/atualizadoPor`] = usuario.email;
+    up[`historico/${db.ref('historico').push().key}`] = {key:k, de:l.status || 'pendente', para:'agendada', data, em:firebase.database.ServerValue.TIMESTAMP, por:usuario.email, roteiro:id};
+  });
+  try { await db.ref().update(up); toast(`${alvo.length} lojas agendadas para ${br(data)}`); }
+  catch(e){ toast('Não salvou: ' + (e.code || e.message)); }
+}
+function renderRoteiros(){
+  const box = $('painelRot');
+  if (!rotSel) {
+    const grupos = [...new Set(ROTEIROS.map(r => r.grupo))];
+    box.innerHTML = grupos.map(g => `<div class="grupo">${g}</div>` + ROTEIROS.filter(r => r.grupo === g).map(r => {
+      const s = resumoRot(r.id), pctR = s.n ? Math.round(s.v / s.n * 100) : 0;
+      const info = s.estado === 'concluido' ? `Concluído ${br(s.ultVisita)}` : s.proxData ? `${s.estado === 'vencido' ? 'Vencido' : 'Agendado'} ${br(s.proxData)}` : s.v ? 'Em andamento' : 'Sem data';
+      return `<button class="rot" data-r="${r.id}">
+        <i style="background:${COR_ROT[s.estado]}"></i>
+        <span><strong>${esc(r.nome)}</strong><small>${num(s.v)} de ${num(s.n)} lojas visitadas</small>
+          <em class="mini"><b style="width:${pctR}%"></b></em></span>
+        <span class="st" style="color:${s.estado === 'pendente' ? 'var(--tinta2)' : COR_ROT[s.estado]}">${info}</span>
+      </button>`;
+    }).join('')).join('');
+    return;
+  }
+  const r = ROT_ID[rotSel], s = resumoRot(rotSel), ls = lojasDoRoteiro(rotSel);
+  box.innerHTML = `
+    <div class="rot-topo">
+      <button class="voltar" id="rVoltar">Todos os roteiros</button>
+      <h3>${esc(r.nome)}</h3>
+      <p>${num(s.v)} de ${num(s.n)} lojas visitadas · ${esc(r.grupo)}</p>
+      <div class="rot-acoes">
+        ${editor ? `<input type="date" id="rData" value="${s.proxData || ''}" aria-label="Data do roteiro"><button class="btn prim" id="rAgendar">Agendar roteiro</button>` : ''}
+        <a class="btn claro" href="${rotaGoogle(rotSel)}" target="_blank" rel="noopener">Abrir rota no Google Maps</a>
+      </div>
+      ${editor ? '<p class="dica">Agendar aplica a data em todas as lojas do roteiro que ainda não foram visitadas.</p>' : ''}
+    </div>
+    ${ls.map(([k, l], i) => {
+      const st = statusEf(l);
+      const data = st === 'visitada' ? br(l.dataVisita) : (st === 'agendada' || st === 'vencida') ? br(l.dataAgendada) : '';
+      return `<button class="item ${k === selKey ? 'sel' : ''}" data-k="${k}">
+        <i style="background:${COR[st]}"></i>
+        <span><strong>${i + 1} · ${esc(l.nome)}</strong><small>Loja ${l.num} · ${esc(l.cidade)}</small></span>
+        <span class="st" style="color:${st === 'pendente' ? 'var(--tinta2)' : COR[st]}">${ROTULO[st]}<small>${data}</small></span>
+      </button>`;
+    }).join('')}`;
+  $('rVoltar').onclick = sairRoteiro;
+  if ($('rAgendar')) $('rAgendar').onclick = () => agendarRoteiro(rotSel);
+}
 
 /* ---------- ORDENAÇÃO E FILTRO ---------- */
 const PESO = {vencida:0, agendada:1, pendente:2, visitada:3};
@@ -459,12 +651,13 @@ function render(){
   let tit = c.visitada === 0
     ? `Nenhuma das ${num(t)} lojas visitada ainda`
     : `${num(c.visitada)} de ${num(t)} lojas visitadas (${pct}%)`;
-  if (c.vencida) tit += `, ${num(c.vencida)} ${c.vencida === 1 ? 'agendamento vencido' : 'agendamentos vencidos'}`;
+  if (c.vencida) tit += `, ${num(c.vencida)} ${c.vencida === 1 ? 'vencida' : 'vencidas'}`;
   else if (agTotal) tit += `, ${num(agTotal)} ${agTotal === 1 ? 'agendada' : 'agendadas'}`;
+  const rc = ROTEIROS.filter(r => resumoRot(r.id).estado === 'concluido').length;
   $('titulo').textContent = tit;
 
   const prox = todas.filter(l => statusEf(l) === 'agendada').sort((a,b) => a.dataAgendada.localeCompare(b.dataAgendada))[0];
-  $('subtitulo').textContent = (prox ? `Próxima visita: ${prox.nome} (${prox.cidade}) em ${br(prox.dataAgendada)}. ` : 'Nenhuma visita agendada. ')
+  $('subtitulo').textContent = `${num(rc)} de ${num(ROTEIROS.length)} roteiros concluídos. ` + (prox ? `Próxima visita: ${prox.nome} (${prox.cidade}) em ${br(prox.dataAgendada)}. ` : 'Nenhuma visita agendada. ')
     + `Faltam ${num(c.pendente)} lojas sem data.` + (editor ? '' : ' Modo consulta.');
 
   // trilha
@@ -507,6 +700,10 @@ function render(){
     </button>`;
   }).join('') : '<div class="vazio">Nenhuma loja com esses filtros. Limpe os filtros para ver todas.</div>';
 
+  document.querySelectorAll('.abas button').forEach(b => b.setAttribute('aria-selected', b.dataset.aba === aba));
+  $('painelRot').style.display = aba === 'roteiros' ? '' : 'none';
+  $('painelLojas').style.display = aba === 'lojas' ? '' : 'none';
+  renderRoteiros();
   desenharMarcadores();
   $('btnLogin').textContent = editor ? 'Sair' : 'Entrar';
   $('btnLogin').className = editor ? 'btn claro' : 'btn laranja';
@@ -521,10 +718,10 @@ function abrirLoja(k){
   selKey = k; modo = 'loja';
   rascunho = {status: l.status || 'pendente', dataAgendada: l.dataAgendada || '', dataVisita: l.dataVisita || '', obs: l.obs || ''};
   $('gTitulo').textContent = `${l.num} · ${l.nome}`;
-  $('gSub').textContent = `${l.cidade}${l.codigo ? ' · código ' + l.codigo : ''}${l.cnpj ? ' · CNPJ ' + l.cnpj : ''}`;
+  $('gSub').textContent = `Loja ${l.num} · ${l.cidade}${ROT_ID[rotDe(l)] ? ' · roteiro ' + ROT_ID[rotDe(l)].nome : ''}${l.cnpj ? ' · CNPJ ' + l.cnpj : ''}`;
   desenharForm(k);
   abrirGaveta();
-  mapa.flyTo([l.lat, l.lng], Math.max(mapa.getZoom(), 30));
+  if (!rotSel || rotDe(l) !== rotSel) { rotSel = null; mapa.flyTo([l.lat, l.lng], Math.max(mapa.getZoom(), 30)); }
   render();
 }
 function desenharForm(k){
@@ -618,6 +815,8 @@ function abrirNova(){
     <label for="nEnd">Endereço completo</label><input id="nEnd" placeholder="Rua, número, bairro, cidade, CEP">
     <label for="nCid">Cidade</label><input id="nCid" list="listaCid">
     <datalist id="listaCid">${[...new Set(Object.values(lojas).map(l=>l.cidade))].sort().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+    <label for="nRot">Roteiro</label>
+    <select id="nRot"><option value="">Sem roteiro</option>${ROTEIROS.map(r => `<option value="${r.id}">${esc(r.grupo)} · ${esc(r.nome)}</option>`).join('')}</select>
     <label for="nCoord">Coordenadas (latitude, longitude)</label>
     <input id="nCoord" placeholder="-23.550520, -46.633308">
     <div class="dica">No Google Maps, clique com o botão direito na loja e copie o primeiro item. Ou clique no ponto certo do mapa.</div>
@@ -647,7 +846,7 @@ async function salvarNova(){
   if (!cid) return err('Informe a cidade.');
   if (!coord) return err('Coordenadas inválidas ou fora do estado de SP. Use o formato -23.55, -46.63.');
   const nova = {num:n, nome, codigo:$('nCod').value.trim(), cnpj:$('nCnpj').value.trim(), endereco:$('nEnd').value.trim().replace(/\s+/g,' '),
-    cidade:cid, lat:+coord[0].toFixed(6), lng:+coord[1].toFixed(6), origem:'nova', status:'pendente', dataAgendada:'', dataVisita:'', obs:'',
+    cidade:cid, roteiro:$('nRot').value, lat:+coord[0].toFixed(6), lng:+coord[1].toFixed(6), origem:'nova', status:'pendente', dataAgendada:'', dataVisita:'', obs:'',
     criadoEm: firebase.database.ServerValue.TIMESTAMP, criadoPor: usuario.email};
   try {
     await db.ref('lojas/L' + n).set(nova);
@@ -671,10 +870,15 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharGave
 
 /* ---------- EVENTOS ---------- */
 $('itens').onclick = e => { const b = e.target.closest('.item'); if (b) abrirLoja(b.dataset.k); };
+$('painelRot').onclick = e => {
+  const it = e.target.closest('.item'); if (it) return abrirLoja(it.dataset.k);
+  const r = e.target.closest('.rot'); if (r) selecionarRoteiro(r.dataset.r);
+};
+document.querySelector('.abas').onclick = e => { const b = e.target.closest('button'); if (b) { aba = b.dataset.aba; render(); } };
 $('trilha').onclick = e => { const b = e.target.closest('button'); if (b) abrirLoja(b.dataset.k); };
 $('kpis').onclick = e => {
   const b = e.target.closest('button.kpi'); if (!b) return;
-  kpiAtivo = kpiAtivo === b.dataset.s ? 'todas' : b.dataset.s;
+  kpiAtivo = kpiAtivo === b.dataset.s ? 'todas' : b.dataset.s; aba = 'lojas';
   $('fStatus').value = kpiAtivo; render();
 };
 $('busca').oninput = render;
@@ -688,8 +892,8 @@ $('fCidade').onchange = () => {
 $('limpar').onclick = () => { $('busca').value=''; $('fStatus').value='todas'; $('fCidade').value=''; kpiAtivo='todas'; render(); mapa.fitBounds(SP_BOUNDS); };
 $('btnNova').onclick = abrirNova;
 $('btnCsv').onclick = () => {
-  const cab = ['Nº loja','Loja','Cidade','Código','CNPJ','Endereço','Status','Data agendada','Data visita','Observações','Latitude','Longitude'];
-  const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => [l.num,l.nome,l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),l.obs,String(l.lat).replace('.',','),String(l.lng).replace('.',',')]);
+  const cab = ['Nº loja','Loja','Roteiro','Cidade','Código','CNPJ','Endereço','Status','Data agendada','Data visita','Observações','Latitude','Longitude'];
+  const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),l.obs,String(l.lat).replace('.',','),String(l.lng).replace('.',',')]);
   const csv = '\ufeff' + [cab, ...linhas].map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
