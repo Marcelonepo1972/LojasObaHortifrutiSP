@@ -249,7 +249,7 @@ const xs = contornoPx.map(p => p[0]), ys = contornoPx.map(p => p[1]);
 const EST = {x0:Math.min(...xs), x1:Math.max(...xs), y0:Math.min(...ys), y1:Math.max(...ys)};
 svg.innerHTML = `<rect x="-5000" y="-5000" width="12000" height="12000" fill="#E3E9E2"/>
   <path d="M${contornoPx.map(p => p[0].toFixed(1)+','+p[1].toFixed(1)).join('L')}Z" fill="#F7FAF6" stroke="#123F28" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-  <g id="gRotulos"></g><g id="gNomes"></g><g id="gPinos"></g><g id="gTemp"></g>`;
+  <g id="gRotulos"></g><g id="gPinos"></g><g id="gNomes"></g><g id="gTemp"></g>`;
 const gNomes = svg.querySelector('#gNomes'), gPinos = svg.querySelector('#gPinos'), gRot = svg.querySelector('#gRotulos'), gTemp = svg.querySelector('#gTemp');
 const vista = {cx:(EST.x0+EST.x1)/2, cy:(EST.y0+EST.y1)/2, w:EST.x1-EST.x0};
 const ESTADO_W = EST.x1 - EST.x0;
@@ -291,13 +291,12 @@ function atualizarTamanhos(){
   gPinos.querySelectorAll('circle').forEach(c => c.setAttribute('r', (+c.dataset.r) * s));
   gTemp.querySelectorAll('circle').forEach(c => c.setAttribute('r', 9 * s));
   gRot.querySelectorAll('text').forEach(t => {
-    const ver = z >= 3 || t.dataset.fixo === '1';
+    const ver = z < 6 && (z >= 3 || t.dataset.fixo === '1');
     t.style.display = ver ? '' : 'none';
     t.setAttribute('font-size', 12 * s);
     t.setAttribute('y', +t.dataset.y - 12 * s);
   });
-  gNomes.style.display = z >= 10 ? '' : 'none';
-  gNomes.querySelectorAll('text').forEach(t => { t.setAttribute('font-size', 11 * s); t.setAttribute('x', +t.dataset.x + 10 * s); t.setAttribute('y', +t.dataset.y + 4 * s); });
+  posicionarEtiquetas();
 }
 function desenharMarcadores(){
   desenharRotulos();
@@ -307,11 +306,42 @@ function desenharMarcadores(){
   });
   gPinos.innerHTML = ord.map(([k, l]) => {
     const s = statusEf(l), sel = k === selKey, [x, y] = PX(l.lat, l.lng);
-    return `<circle data-k="${k}" data-r="${sel ? 11 : 7}" cx="${x}" cy="${y}" fill="${COR[s]}" stroke="${sel ? '#17251C' : '#fff'}" stroke-width="${sel ? 3 : 1.5}" vector-effect="non-scaling-stroke" style="cursor:pointer"><title>${l.num} · ${esc(l.nome)} (${ROTULO[s]})</title></circle>`;
+    return `<circle data-k="${k}" data-r="${sel ? 11 : s === 'pendente' ? 5 : 8}" cx="${x}" cy="${y}" fill="${COR[s]}" stroke="${sel ? '#17251C' : '#fff'}" stroke-width="${sel ? 3 : 1.5}" vector-effect="non-scaling-stroke" style="cursor:pointer"><title>${l.num} · ${esc(l.nome)} (${ROTULO[s]})</title></circle>`;
   }).join('');
-  gNomes.innerHTML = Object.values(lojas).map(l => { const [x, y] = PX(l.lat, l.lng);
-    return `<text data-x="${x}" data-y="${y}" fill="#17251C" stroke="#F7FAF6" stroke-width="3" paint-order="stroke" vector-effect="non-scaling-stroke">${l.num} ${esc(l.nome)}</text>`; }).join('');
   atualizarTamanhos();
+}
+
+/* etiquetas: só visitadas e agendadas, com data, sem sobrepor */
+function posicionarEtiquetas(){
+  const s = escalaTela(), cw = svg.clientWidth, ch = svg.clientHeight;
+  const vx0 = vista.cx - vista.w/2, vy0 = vista.cy - (vista.w * ch / cw)/2;
+  const PRI = {vencida:0, agendada:1, visitada:2};
+  const alvos = Object.entries(lojas).filter(([k, l]) => statusEf(l) !== 'pendente' || k === selKey)
+    .map(([k, l]) => { const [x, y] = PX(l.lat, l.lng); return {k, l, s:statusEf(l), sx:(x - vx0)/s, sy:(y - vy0)/s, x, y}; })
+    .filter(a => a.sx > -40 && a.sx < cw + 40 && a.sy > -40 && a.sy < ch + 40)
+    .sort((a, b) => (b.k === selKey) - (a.k === selKey) || PRI[a.s] - PRI[b.s]
+      || (a.s === 'visitada' ? (b.l.dataVisita||'').localeCompare(a.l.dataVisita||'') : (a.l.dataAgendada||'').localeCompare(b.l.dataAgendada||'')));
+  const ocupado = [], sai = [];
+  const bate = r => ocupado.some(o => r.x < o.x + o.w + 3 && r.x + r.w + 3 > o.x && r.y < o.y + o.h + 3 && r.y + r.h + 3 > o.y);
+  const curto = iso => iso ? iso.slice(8,10) + '/' + iso.slice(5,7) : '';
+  for (const a of alvos) {
+    const txt1 = a.l.nome;
+    const txt2 = a.s === 'visitada' ? `Visitada ${curto(a.l.dataVisita)}` : a.s === 'pendente' ? 'Sem data' : `${a.s === 'vencida' ? 'Vencida' : 'Agendada'} ${curto(a.l.dataAgendada)}`;
+    const w = Math.max(txt1.length * 7.6, txt2.length * 7.2) + 18, h = 34, d = 12;
+    const cands = [[a.sx + d, a.sy - h/2], [a.sx - d - w, a.sy - h/2], [a.sx - w/2, a.sy - d - h], [a.sx - w/2, a.sy + d],
+                   [a.sx + d, a.sy - h - 2], [a.sx + d, a.sy + 2], [a.sx - d - w, a.sy - h - 2], [a.sx - d - w, a.sy + 2]];
+    const c = cands.map(([x, y]) => ({x, y, w, h})).find(r => !bate(r));
+    if (!c) continue;
+    ocupado.push(c);
+    const cor = COR[a.s], X = vx0 + c.x * s, Y = vy0 + c.y * s;
+    sai.push(`<g data-k="${a.k}" style="cursor:pointer">
+      <rect data-k="${a.k}" x="${X}" y="${Y}" width="${w*s}" height="${h*s}" rx="${4*s}" fill="#fff" stroke="${cor}" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+      <rect data-k="${a.k}" x="${X}" y="${Y}" width="${4*s}" height="${h*s}" fill="${cor}"/>
+      <text data-k="${a.k}" x="${X + 10*s}" y="${Y + 14*s}" font-size="${11.5*s}" font-weight="600" fill="#17251C">${esc(txt1)}</text>
+      <text data-k="${a.k}" x="${X + 10*s}" y="${Y + 27*s}" font-size="${11*s}" font-weight="600" fill="${a.s === 'agendada' ? '#9A6410' : cor}">${txt2}</text>
+    </g>`);
+  }
+  gNomes.innerHTML = sai.join('');
 }
 function marcarTemp(lat, lng){
   const [x, y] = PX(lat, lng);
