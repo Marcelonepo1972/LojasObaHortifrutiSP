@@ -1101,6 +1101,7 @@ function render(){
 let rascunho = null;
 function abrirLoja(k){
   const l = lojas[k]; if (!l) return;
+  if (relRascunho && relRascunho.k !== k && relRascunho.img && !confirm('O relatório da outra loja ainda não foi salvo. Descartar?')) return;
   sairModoNova();
   selKey = k; modo = 'loja';
   if (relRascunho && relRascunho.k !== k) relRascunho = null;
@@ -1164,6 +1165,7 @@ function guardarCampos(){
 }
 async function salvarVisita(k){
   guardarCampos();
+  if (relPendente(k) && !(await salvarRelatorio(k))) return;
   const r = rascunho, antes = lojas[k].status || 'pendente';
   if (r.status === 'agendada' && !r.dataAgendada) return toast('Informe a data agendada');
   if (r.status === 'visitada' && !r.dataVisita) return toast('Informe a data da visita');
@@ -1275,13 +1277,14 @@ function resumoUltimo(lista){
 
 async function salvarRelatorio(k){
   const r = relRascunho, l = lojas[k];
-  if (!r || !r.img) return;
-  if (!r.data) return toast('Informe a data da visita');
-  if (r.data > hoje()) return toast('A data da visita não pode ser futura');
-  if (!r.status) return toast('Escolha o status geral');
-  if (r.status !== 'verde' && !r.pend.trim()) return toast('Descreva as ações pendentes');
-  if (r.prazo && r.prazo < r.data) return toast('O prazo não pode ser antes da visita');
-  $('rSalvar').disabled = true; $('rSalvar').textContent = 'Salvando…';
+  if (!r || !r.img) return false;
+  const falha = msg => { toast(msg); return false; };
+  if (!r.data) return falha('Relatório: informe a data da visita');
+  if (r.data > hoje()) return falha('Relatório: a data da visita não pode ser futura');
+  if (!r.status) return falha('Relatório: escolha o status geral');
+  if (r.status !== 'verde' && !r.pend.trim()) return falha('Relatório: descreva as ações pendentes');
+  if (r.prazo && r.prazo < r.data) return falha('Relatório: o prazo não pode ser antes da visita');
+  if ($('rSalvar')) { $('rSalvar').disabled = true; $('rSalvar').textContent = 'Salvando…'; }
   const id = db.ref('visitas/' + k).push().key, TS = firebase.database.ServerValue.TIMESTAMP;
   const meta = {data:r.data, status:r.status, pendencias:r.pend.trim(), prazo:r.prazo || '', thumb:r.thumb,
     kb:r.kbDepois, w:r.w, h:r.h, criadoEm:Date.now(), por:usuario.email};
@@ -1301,9 +1304,11 @@ async function salvarRelatorio(k){
     relRascunho = null;
     toast('Relatório salvo');
     desenharRelForm(k); carregarRelatorios(k, true);
+    return true;
   } catch(e){
-    toast('Não salvou: ' + (e.code || e.message));
+    toast('Relatório não salvou: ' + (e.code || e.message));
     if ($('rSalvar')) { $('rSalvar').disabled = false; $('rSalvar').textContent = 'Salvar relatório'; }
+    return false;
   }
 }
 
@@ -1319,6 +1324,7 @@ function carregarRelatorios(k, forcar){
 function desenharRelLista(k){
   const box = $('relLista'); if (!box || selKey !== k) return;
   const lista = (relCache[k] || []).slice().sort((a, b) => (b.data || '').localeCompare(a.data || '') || (b.criadoEm || 0) - (a.criadoEm || 0));
+  if (!lista.length && relRascunho && relRascunho.k === k){ box.innerHTML = ''; return; }
   if (!lista.length){ box.innerHTML = `<div class="dica">${editor ? 'Nenhum relatório ainda. Depois da visita, exporte o slide da loja como imagem e use "Subir relatório".' : 'Nenhum relatório desta loja ainda.'}</div>`; return; }
   box.innerHTML = lista.map(v => {
     const s = SEMAFORO[v.status] || SEMAFORO.verde;
@@ -1442,7 +1448,10 @@ function sairModoNova(){
 
 /* ---------- GAVETA GERAL ---------- */
 function abrirGaveta(){ $('gaveta').classList.add('aberta'); $('gaveta').setAttribute('aria-hidden','false'); }
+function relPendente(k){ return !!(relRascunho && relRascunho.k === k && relRascunho.img); }
 function fecharGaveta(){
+  if (selKey && relPendente(selKey) && !confirm('O relatório que você subiu ainda não foi salvo. Fechar e descartar?')) return;
+  if (relRascunho && relRascunho.k === selKey) relRascunho = null;
   $('gaveta').classList.remove('aberta'); $('gaveta').setAttribute('aria-hidden','true');
   sairModoNova(); selKey = null; modo = null; render();
 }
