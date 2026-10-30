@@ -112,6 +112,9 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
 .hist div{padding:5px 0;border-top:1px dashed var(--linha)}
 .dica{font-size:12px;color:var(--tinta2);margin-top:4px}
 .dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg2-box{margin-top:12px;padding:10px 12px;border:1.5px dashed var(--linha);border-radius:12px}
+.seg2-box h4{margin:0 0 6px;font-size:13px}
+.item small.seg2{display:block;font-weight:700}
 
 .modal-fundo{position:fixed;inset:0;z-index:1100;background:rgba(15,40,20,.55);display:none;align-items:center;justify-content:center;padding:16px}
 .modal-fundo.aberto{display:flex}
@@ -464,6 +467,11 @@ const num = n => Number(n).toLocaleString('pt-BR');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const hoje = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
 const br = iso => iso ? iso.split('-').reverse().join('/') : '';
+const seg2 = l => { if (!l.dataAgendada2) return null; const d = l.dataAgendada2.slice(8,10) + '/' + l.dataAgendada2.slice(5,7);
+  if (l.dataVisita2) return {txt:`2ª visita feita ${l.dataVisita2.slice(8,10)}/${l.dataVisita2.slice(5,7)}`, cor:'#1F8A2E'};
+  if (l.dataAgendada2 < hoje()) return {txt:`2ª agenda vencida ${d}`, cor:'#D93A2B'};
+  return {txt:`2ª agenda ${d}`, cor:'#B36200'}; };
+const seg2Html = l => { const x = seg2(l); return x ? `<small class="seg2" style="color:${x.cor}">${x.txt}</small>` : ''; };
 const statusEf = l => (l.status === 'agendada' && l.dataAgendada && l.dataAgendada < hoje()) ? 'vencida' : (l.status || 'pendente');
 function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2600); }
 
@@ -694,7 +702,9 @@ function posicionarEtiquetas(){
       const cy = ys[j], cor = COR[a.st];
       const ax = ci === 0 ? cx + CARD_W : cx, ay = cy + CARD_H/2;
       const meioX = ci === 0 ? ax + 18 : ax - 18;
-      const txt2 = a.st === 'visitada' ? `Visitada ${curto(a.l.dataVisita)}` : a.st === 'pendente' ? 'A visitar' : `${a.st === 'vencida' ? 'Vencida' : 'Agendada'} ${curto(a.l.dataAgendada)}`;
+      const tem2 = a.l.dataAgendada2 && !a.l.dataVisita2 && a.st !== 'pendente';
+      const txt2 = tem2 ? `${a.st === 'visitada' ? 'Visit.' : a.st === 'vencida' ? 'Venc.' : 'Agend.'} ${curto(a.st === 'visitada' ? a.l.dataVisita : a.l.dataAgendada)} · 2ª ${curto(a.l.dataAgendada2)}`
+        : a.st === 'visitada' ? `Visitada ${curto(a.l.dataVisita)}` : a.st === 'pendente' ? 'A visitar' : `${a.st === 'vencida' ? 'Vencida' : 'Agendada'} ${curto(a.l.dataAgendada)}`;
       const nome = a.l.nome.length > 19 ? a.l.nome.slice(0, 18) + '…' : a.l.nome;
       const S = (x, y) => `${vx0 + x * s},${vy0 + y * s}`;
       sai.push(`<g data-k="${a.k}" style="cursor:pointer">
@@ -884,7 +894,7 @@ function renderRoteiros(){
       const data = st === 'visitada' ? br(l.dataVisita) : (st === 'agendada' || st === 'vencida') ? br(l.dataAgendada) : '';
       return `<button class="item ${k === selKey ? 'sel' : ''}" data-k="${k}">
         <i style="background:${COR[st]}"></i>
-        <span><strong>${i + 1} · ${esc(l.nome)}</strong><small>Loja ${l.num} · ${esc(l.cidade)}</small></span>
+        <span><strong>${i + 1} · ${esc(l.nome)}</strong><small>Loja ${l.num} · ${esc(l.cidade)}</small>${seg2Html(l)}</span>
         <span class="st" style="color:${st === 'pendente' ? 'var(--tinta2)' : COR[st]}">${ROTULO[st]}<small>${data}</small></span>
       </button>`;
     }).join('')}`;
@@ -951,7 +961,7 @@ function renderRegiao(){
   while (dir.length - esq.length > 2) { const m = dir.filter(a => a.p).reduce((x, a) => !x || a.p[0] < x.p[0] ? a : x, null); if (!m) break; dir.splice(dir.indexOf(m), 1); esq.push(m); esq.sort((a, b) => a.p[1] - b.p[1]); }
   const card = a => {
     const st = statusEf(a.l), cor = COR[st];
-    const linha2 = st === 'visitada' ? `Visitada ${CURTO(a.l.dataVisita)}` : st === 'pendente' ? (a.p ? 'A visitar' : 'A visitar · sem posição no mapa') : `${st === 'vencida' ? 'Vencida' : 'Agendada'} ${CURTO(a.l.dataAgendada)}`;
+    const linha2 = (st === 'visitada' ? `Visitada ${CURTO(a.l.dataVisita)}` : st === 'pendente' ? (a.p ? 'A visitar' : 'A visitar · sem posição no mapa') : `${st === 'vencida' ? 'Vencida' : 'Agendada'} ${CURTO(a.l.dataAgendada)}`) + (a.l.dataAgendada2 && !a.l.dataVisita2 ? ` · 2ª ${CURTO(a.l.dataAgendada2)}` : '');
     const ct = st === 'agendada' ? '#B36200' : st === 'pendente' ? 'var(--tinta2)' : cor;
     return `<button class="card ${a.k === selKey ? 'sel' : ''}" data-k="${a.k}" style="--c:${cor};--ct:${ct}"><span class="n">${ordem[a.k]}</span><span><strong>${esc(a.l.nome)}</strong><small>${linha2}</small></span></button>`;
   };
@@ -1081,7 +1091,7 @@ function render(){
     const data = s === 'visitada' ? br(l.dataVisita) : (s === 'agendada' || s === 'vencida') ? br(l.dataAgendada) : '';
     return `<button class="item ${k===selKey?'sel':''}" data-k="${k}">
       <i style="background:${COR[s]}"></i>
-      <span><strong>${l.num} · ${esc(l.nome)}</strong><small>${esc(l.cidade)}</small>${pendTxt(l)}</span>
+      <span><strong>${l.num} · ${esc(l.nome)}</strong><small>${esc(l.cidade)}</small>${pendTxt(l)}${seg2Html(l)}</span>
       <span class="st" style="color:${s==='pendente'?'var(--tinta2)':COR[s]}">${ROTULO[s]}<small>${data}</small></span>
     </button>`;
   }).join('') : '<div class="vazio">Nenhuma loja com esses filtros. Limpe os filtros para ver todas.</div>';
@@ -1105,7 +1115,7 @@ function abrirLoja(k){
   sairModoNova();
   selKey = k; modo = 'loja';
   if (relRascunho && relRascunho.k !== k) relRascunho = null;
-  rascunho = {status: l.status || 'pendente', dataAgendada: l.dataAgendada || '', dataVisita: l.dataVisita || '', obs: l.obs || ''};
+  rascunho = {status: l.status || 'pendente', dataAgendada: l.dataAgendada || '', dataVisita: l.dataVisita || '', dataAgendada2: l.dataAgendada2 || '', dataVisita2: l.dataVisita2 || '', obs: l.obs || ''};
   $('gTitulo').textContent = `${l.num} · ${l.nome}`;
   $('gSub').textContent = `Loja ${l.num} · ${l.cidade}${ROT_ID[rotDe(l)] ? ' · roteiro ' + ROT_ID[rotDe(l)].nome : ''}${l.cnpj ? ' · CNPJ ' + l.cnpj : ''}`;
   desenharForm(k);
@@ -1129,6 +1139,14 @@ function desenharForm(k){
     ${r.status !== 'pendente' ? `<div class="dupla">
       <div><label for="dAg">Data agendada</label><input type="date" id="dAg" value="${r.dataAgendada}" ${dis}></div>
       ${r.status === 'visitada' ? `<div><label for="dVi">Data da visita</label><input type="date" id="dVi" value="${r.dataVisita}" ${dis}></div>` : '<div></div>'}
+    </div>
+    <div class="seg2-box">
+      <h4>2ª agenda nesta loja (retorno)</h4>
+      <div class="dupla">
+        <div><label for="dAg2">Data da 2ª agenda</label><input type="date" id="dAg2" value="${r.dataAgendada2}" ${dis}></div>
+        ${r.dataAgendada2 ? `<div><label for="dVi2">2ª visita feita em</label><input type="date" id="dVi2" value="${r.dataVisita2}" ${dis}></div>` : '<div></div>'}
+      </div>
+      <p class="dica">Opcional. Para remover, apague a data.</p>
     </div>` : ''}
     <label for="obs">Observações</label>
     <textarea id="obs" placeholder="Pontos levantados, pendências, contato na loja" ${dis}>${esc(r.obs)}</textarea>
@@ -1140,6 +1158,7 @@ function desenharForm(k){
       <div class="rel-lista" id="relLista"><div class="dica">Carregando relatórios…</div></div>
     </section>
     <div class="hist" id="hist"></div>`;
+  if ($('dAg2')) $('dAg2').onchange = () => { const tinha = !!rascunho.dataAgendada2; guardarCampos(); if (tinha !== !!rascunho.dataAgendada2) desenharForm(k); };
   $('seg').querySelectorAll('button').forEach(b => b.onclick = () => {
     guardarCampos();
     rascunho.status = b.dataset.s;
@@ -1161,6 +1180,8 @@ function desenharForm(k){
 function guardarCampos(){
   if ($('dAg')) rascunho.dataAgendada = $('dAg').value;
   if ($('dVi')) rascunho.dataVisita = $('dVi').value;
+  if ($('dAg2')) { rascunho.dataAgendada2 = $('dAg2').value; if (!rascunho.dataAgendada2) rascunho.dataVisita2 = ''; }
+  if ($('dVi2')) rascunho.dataVisita2 = $('dVi2').value;
   if ($('obs')) rascunho.obs = $('obs').value;
 }
 async function salvarVisita(k){
@@ -1170,10 +1191,16 @@ async function salvarVisita(k){
   if (r.status === 'agendada' && !r.dataAgendada) return toast('Informe a data agendada');
   if (r.status === 'visitada' && !r.dataVisita) return toast('Informe a data da visita');
   if (r.status === 'visitada' && r.dataVisita > hoje()) return toast('A data da visita não pode ser futura');
+  const usa2 = r.status !== 'pendente' && !!r.dataAgendada2;
+  if (usa2 && r.dataAgendada && r.dataAgendada2 <= r.dataAgendada) return toast('A 2ª agenda precisa ser depois da 1ª data');
+  if (usa2 && r.dataVisita2 && r.dataVisita2 > hoje()) return toast('A data da 2ª visita não pode ser futura');
+  const ant2 = (lojas[k].dataAgendada2 || '') + '|' + (lojas[k].dataVisita2 || '');
   const dados = {
     status: r.status,
     dataAgendada: r.status === 'pendente' ? '' : r.dataAgendada,
     dataVisita: r.status === 'visitada' ? r.dataVisita : '',
+    dataAgendada2: usa2 ? r.dataAgendada2 : '',
+    dataVisita2: usa2 ? (r.dataVisita2 || '') : '',
     obs: r.obs.trim(),
     atualizadoEm: firebase.database.ServerValue.TIMESTAMP,
     atualizadoPor: usuario.email
@@ -1181,6 +1208,8 @@ async function salvarVisita(k){
   try {
     await db.ref('lojas/' + k).update(dados);
     await db.ref('historico').push({key:k, de:antes, para:r.status, data: r.status==='visitada'?r.dataVisita:r.dataAgendada, em: firebase.database.ServerValue.TIMESTAMP, por: usuario.email});
+    if (ant2 !== dados.dataAgendada2 + '|' + dados.dataVisita2)
+      await db.ref('historico').push({key:k, de:'2ª agenda', para: !dados.dataAgendada2 ? 'removida' : dados.dataVisita2 ? 'visita feita' : 'marcada', data: dados.dataVisita2 || dados.dataAgendada2 || '', em: firebase.database.ServerValue.TIMESTAMP, por: usuario.email});
     toast('Visita salva');
     fecharGaveta();
   } catch(e){ toast('Não salvou: ' + (e.code || e.message)); }
@@ -1482,8 +1511,8 @@ $('fCidade').onchange = () => {
 $('limpar').onclick = () => { $('busca').value=''; $('fStatus').value='todas'; $('fCidade').value=''; kpiAtivo='todas'; render(); mapa.fitBounds(SP_BOUNDS); };
 $('btnNova').onclick = abrirNova;
 $('btnCsv').onclick = () => {
-  const cab = ['Nº loja','Loja','Roteiro','Cidade','Código','CNPJ','Endereço','Status','Data agendada','Data visita','Observações','Latitude','Longitude'];
-  const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),l.obs,String(l.lat).replace('.',','),String(l.lng).replace('.',',')]);
+  const cab = ['Nº loja','Loja','Roteiro','Cidade','Código','CNPJ','Endereço','Status','Data agendada','Data visita','2ª agenda','2ª visita feita','Observações','Latitude','Longitude'];
+  const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),br(l.dataAgendada2),br(l.dataVisita2),l.obs,String(l.lat).replace('.',','),String(l.lng).replace('.',',')]);
   const csv = '\ufeff' + [cab, ...linhas].map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
