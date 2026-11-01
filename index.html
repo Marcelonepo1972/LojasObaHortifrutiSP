@@ -311,6 +311,38 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
 .visor-palco.cheio{display:block}
 .visor-palco.cheio img{max-width:none;max-height:none;cursor:zoom-out}
 .visor-palco img.carregando{filter:blur(6px);opacity:.8}
+/* ---------- VISITAS (várias por loja) ---------- */
+.selos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.selo{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--linha);border-radius:999px;padding:3px 11px 3px 4px;font-size:12.5px;font-weight:700;color:var(--tinta2)}
+.selo b{min-width:26px;height:26px;border-radius:999px;background:var(--verde);color:#fff;display:grid;place-items:center;font-family:var(--f-titulo);font-size:16px;line-height:1;padding:2px 7px 0}
+.selo.zero b{background:var(--pedra)}
+.selo.txt{padding:4px 11px}
+.selo.prox{border-color:var(--laranja);color:#B36200}
+.selo.venc{border-color:var(--tomate);color:var(--tomate)}
+.vis-topo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:18px}
+.vis-topo h3{margin:0;font-family:var(--f-titulo);font-weight:800;font-size:19px;color:var(--verde-esc)}
+.linha-tempo{position:relative;margin-top:10px;padding-left:22px}
+.linha-tempo::before{content:"";position:absolute;left:7px;top:8px;bottom:14px;width:2px;background:var(--linha);border-radius:2px}
+.vis{position:relative;border:1px solid var(--linha);border-left:4px solid var(--c);border-radius:12px;background:#fff;padding:10px 12px;margin-bottom:10px}
+.vis::before{content:"";position:absolute;left:-23px;top:13px;width:12px;height:12px;border-radius:50%;background:var(--c);box-shadow:0 0 0 3px #fff}
+.vis-cab{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.vis-cab strong{font-family:var(--f-titulo);font-weight:800;font-size:17px;line-height:1.1;color:var(--verde-esc)}
+.vis-cab .tag{margin:0}
+.vis-datas{font-size:13px;color:var(--tinta2);margin-top:2px}
+.vis-obs{margin:6px 0 0;font-size:13.5px;white-space:pre-line}
+.vis-bts{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:4px}
+.vis-bts button{border:0;background:none;padding:8px 0;font-size:13.5px;font-weight:800;color:var(--verde)}
+.vis-bts button.apagar{color:var(--tomate)}
+.vis .rel-lista:empty{display:none}
+.vis .rel-lista{margin-top:8px}
+.vis .rel-card{grid-template-columns:84px 1fr}
+.vis .rel-card .mini-img img{width:84px;height:58px}
+.vis-form{background:#FAFCF8;border-style:dashed;border-left-style:solid}
+.seg.dois{grid-template-columns:1fr 1fr}
+.vazio-vis{font-size:13.5px;color:var(--tinta2);padding:10px 12px;margin-top:10px;background:var(--fundo);border-radius:10px}
+.hist summary{cursor:pointer;font-weight:700;color:var(--tinta);font-size:13px;padding:6px 0}
+.vezes{display:inline-block;margin-top:3px;background:#E8F4E1;color:var(--verde-esc);font-style:normal;font-weight:800;font-size:11.5px;border-radius:999px;padding:1px 8px}
+.filtros #fVezes{grid-column:1/-1}
 </style>
 </head>
 <body>
@@ -378,6 +410,7 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
           <option value="visitada">Visitadas</option>
         </select>
         <select id="fCidade"><option value="">Todas as cidades</option></select>
+        <select id="fVezes" aria-label="Quantidade de visitas"><option value="">Qualquer nº de visitas</option></select>
       </div>
       <div class="cont"><span id="contagem"></span><button id="limpar">Limpar filtros</button></div>
       <div id="itens"></div>
@@ -388,7 +421,7 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
 
 <aside class="gaveta" id="gaveta" aria-hidden="true">
   <div class="gav-topo">
-    <div><h2 id="gTitulo"></h2><p id="gSub"></p></div>
+    <div><h2 id="gTitulo"></h2><p id="gSub"></p><div class="selos" id="gSelos"></div></div>
     <button class="fechar" id="gFechar" aria-label="Fechar">×</button>
   </div>
   <div class="gav-corpo" id="gCorpo"></div>
@@ -467,11 +500,33 @@ const num = n => Number(n).toLocaleString('pt-BR');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const hoje = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
 const br = iso => iso ? iso.split('-').reverse().join('/') : '';
-const seg2 = l => { if (!l.dataAgendada2) return null; const d = l.dataAgendada2.slice(8,10) + '/' + l.dataAgendada2.slice(5,7);
-  if (l.dataVisita2) return {txt:`2ª visita feita ${l.dataVisita2.slice(8,10)}/${l.dataVisita2.slice(5,7)}`, cor:'#1F8A2E'};
-  if (l.dataAgendada2 < hoje()) return {txt:`2ª agenda vencida ${d}`, cor:'#D93A2B'};
-  return {txt:`2ª agenda ${d}`, cor:'#B36200'}; };
-const seg2Html = l => { const x = seg2(l); return x ? `<small class="seg2" style="color:${x.cor}">${x.txt}</small>` : ''; };
+/* ---------- VISITAS: várias por loja. Status da loja = última visita ---------- */
+const refData = v => (v.status === 'visitada' ? v.dataVisita : v.dataAgendada) || '';
+function visitasLegado(l){ /* formato antigo: 1 visita + 2ª agenda */
+  const out = [];
+  if (l.status === 'visitada' && l.dataVisita) out.push({id:'leg1', status:'visitada', dataAgendada:l.dataAgendada || '', dataVisita:l.dataVisita, obs:l.obs || '', criadoEm:1});
+  else if (l.status === 'agendada' && l.dataAgendada) out.push({id:'leg1', status:'agendada', dataAgendada:l.dataAgendada, dataVisita:'', obs:l.obs || '', criadoEm:1});
+  if (l.dataAgendada2 && out.length) out.push({id:'leg2', status:l.dataVisita2 ? 'visitada' : 'agendada', dataAgendada:l.dataAgendada2, dataVisita:l.dataVisita2 || '', obs:'', criadoEm:2});
+  return out;
+}
+function prepararLoja(l){
+  const lista = (l.migrado ? Object.entries(l.historicoVisitas || {}).map(([id, v]) => ({...v, id})) : visitasLegado(l))
+    .filter(v => v && (v.status === 'visitada' ? v.dataVisita : v.dataAgendada))
+    .sort((a, b) => refData(a).localeCompare(refData(b)) || (a.criadoEm || 0) - (b.criadoEm || 0));
+  lista.forEach((v, i) => v.n = i + 1);
+  const ult = lista[lista.length - 1], feitas = lista.filter(v => v.status === 'visitada');
+  l._vis = lista; l._feitas = feitas.length;
+  l.status = ult ? ult.status : 'pendente';
+  l.dataAgendada = ult ? (ult.dataAgendada || '') : '';
+  l.dataVisita = feitas.length ? feitas[feitas.length - 1].dataVisita : '';
+  return l;
+}
+const prepararTodas = () => Object.values(lojas).forEach(prepararLoja);
+const nVis = l => l._feitas || 0;
+const vezesTxt = n => n === 1 ? '1 visita' : `${num(n)} visitas`;
+const vezesHtml = l => nVis(l) ? `<em class="vezes">${vezesTxt(nVis(l))}</em>` : '';
+const proxAgenda = l => { const ag = (l._vis || []).filter(v => v.status === 'agendada'); return ag.find(v => v.dataAgendada >= hoje()) || ag[ag.length - 1] || null; };
+const ehRetorno = l => l.status === 'agendada' && nVis(l) > 0;
 const statusEf = l => (l.status === 'agendada' && l.dataAgendada && l.dataAgendada < hoje()) ? 'vencida' : (l.status || 'pendente');
 function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2600); }
 
@@ -702,9 +757,8 @@ function posicionarEtiquetas(){
       const cy = ys[j], cor = COR[a.st];
       const ax = ci === 0 ? cx + CARD_W : cx, ay = cy + CARD_H/2;
       const meioX = ci === 0 ? ax + 18 : ax - 18;
-      const tem2 = a.l.dataAgendada2 && !a.l.dataVisita2 && a.st !== 'pendente';
-      const txt2 = tem2 ? `${a.st === 'visitada' ? 'Visit.' : a.st === 'vencida' ? 'Venc.' : 'Agend.'} ${curto(a.st === 'visitada' ? a.l.dataVisita : a.l.dataAgendada)} · 2ª ${curto(a.l.dataAgendada2)}`
-        : a.st === 'visitada' ? `Visitada ${curto(a.l.dataVisita)}` : a.st === 'pendente' ? 'A visitar' : `${a.st === 'vencida' ? 'Vencida' : 'Agendada'} ${curto(a.l.dataAgendada)}`;
+      const txt2 = a.st === 'visitada' ? `Visitada ${curto(a.l.dataVisita)}${nVis(a.l) > 1 ? ' · ' + nVis(a.l) + 'x' : ''}`
+        : a.st === 'pendente' ? 'A visitar' : `${a.st === 'vencida' ? 'Vencida' : ehRetorno(a.l) ? 'Retorno' : 'Agendada'} ${curto(a.l.dataAgendada)}`;
       const nome = a.l.nome.length > 19 ? a.l.nome.slice(0, 18) + '…' : a.l.nome;
       const S = (x, y) => `${vx0 + x * s},${vy0 + y * s}`;
       sai.push(`<g data-k="${a.k}" style="cursor:pointer">
@@ -850,15 +904,22 @@ async function agendarRoteiro(id){
   const data = $('rData').value;
   if (!data) return toast('Escolha a data do roteiro');
   if (data < hoje() && !confirm('A data escolhida já passou. Agendar mesmo assim?')) return;
-  const alvo = lojasDoRoteiro(id).filter(([k, l]) => statusEf(l) !== 'visitada');
-  if (!alvo.length) return toast('Todas as lojas desse roteiro já foram visitadas');
-  const up = {};
+  const ls = lojasDoRoteiro(id);
+  let alvo = ls.filter(([k, l]) => statusEf(l) !== 'visitada'), rodada = false;
+  if (!alvo.length) {
+    if (!confirm(`Todas as ${num(ls.length)} lojas desse roteiro já foram visitadas. Agendar uma nova rodada para ${br(data)}?`)) return;
+    alvo = ls; rodada = true;
+  }
+  const up = {}, TS = firebase.database.ServerValue.TIMESTAMP;
   alvo.forEach(([k, l]) => {
-    up[`lojas/${k}/status`] = 'agendada'; up[`lojas/${k}/dataAgendada`] = data;
-    up[`lojas/${k}/atualizadoEm`] = firebase.database.ServerValue.TIMESTAMP; up[`lojas/${k}/atualizadoPor`] = usuario.email;
-    up[`historico/${db.ref('historico').push().key}`] = {key:k, de:l.status || 'pendente', para:'agendada', data, em:firebase.database.ServerValue.TIMESTAMP, por:usuario.email, roteiro:id};
+    const vis = (l._vis || []).map(x => ({...x}));
+    const aberta = vis.filter(x => x.status === 'agendada').pop();
+    if (aberta && !rodada) aberta.dataAgendada = data;
+    else vis.push({id:null, status:'agendada', dataAgendada:data, dataVisita:'', obs:'', criadoEm:Date.now(), por:usuario.email});
+    Object.assign(up, upDaLoja(k, vis));
+    up[`historico/${db.ref('historico').push().key}`] = {key:k, de:l.status || 'pendente', para:'agendada', data, em:TS, por:usuario.email, roteiro:id};
   });
-  try { await db.ref().update(up); toast(`${alvo.length} lojas agendadas para ${br(data)}`); }
+  try { await db.ref().update(up); toast(`${num(alvo.length)} lojas agendadas para ${br(data)}`); }
   catch(e){ toast('Não salvou: ' + (e.code || e.message)); }
 }
 function renderRoteiros(){
@@ -887,14 +948,14 @@ function renderRoteiros(){
         ${editor ? `<input type="date" id="rData" value="${s.proxData || ''}" aria-label="Data do roteiro"><button class="btn prim" id="rAgendar">Agendar roteiro</button>` : ''}
         <a class="btn claro" href="${rotaGoogle(rotSel)}" target="_blank" rel="noopener">Abrir rota no Google Maps</a>
       </div>
-      ${editor ? '<p class="dica">Agendar aplica a data em todas as lojas do roteiro que ainda não foram visitadas.</p>' : ''}
+      ${editor ? '<p class="dica">Agendar aplica a data em todas as lojas do roteiro que ainda não foram visitadas. Se todas já foram, cria uma nova rodada.</p>' : ''}
     </div>
     ${ls.map(([k, l], i) => {
       const st = statusEf(l);
       const data = st === 'visitada' ? br(l.dataVisita) : (st === 'agendada' || st === 'vencida') ? br(l.dataAgendada) : '';
       return `<button class="item ${k === selKey ? 'sel' : ''}" data-k="${k}">
         <i style="background:${COR[st]}"></i>
-        <span><strong>${i + 1} · ${esc(l.nome)}</strong><small>Loja ${l.num} · ${esc(l.cidade)}</small>${seg2Html(l)}</span>
+        <span><strong>${i + 1} · ${esc(l.nome)}</strong><small>Loja ${l.num} · ${esc(l.cidade)}</small>${vezesHtml(l)}</span>
         <span class="st" style="color:${st === 'pendente' ? 'var(--tinta2)' : COR[st]}">${ROTULO[st]}<small>${data}</small></span>
       </button>`;
     }).join('')}`;
@@ -961,7 +1022,7 @@ function renderRegiao(){
   while (dir.length - esq.length > 2) { const m = dir.filter(a => a.p).reduce((x, a) => !x || a.p[0] < x.p[0] ? a : x, null); if (!m) break; dir.splice(dir.indexOf(m), 1); esq.push(m); esq.sort((a, b) => a.p[1] - b.p[1]); }
   const card = a => {
     const st = statusEf(a.l), cor = COR[st];
-    const linha2 = (st === 'visitada' ? `Visitada ${CURTO(a.l.dataVisita)}` : st === 'pendente' ? (a.p ? 'A visitar' : 'A visitar · sem posição no mapa') : `${st === 'vencida' ? 'Vencida' : 'Agendada'} ${CURTO(a.l.dataAgendada)}`) + (a.l.dataAgendada2 && !a.l.dataVisita2 ? ` · 2ª ${CURTO(a.l.dataAgendada2)}` : '');
+    const linha2 = st === 'visitada' ? `Visitada ${CURTO(a.l.dataVisita)}${nVis(a.l) > 1 ? ' · ' + nVis(a.l) + 'x' : ''}` : st === 'pendente' ? (a.p ? 'A visitar' : 'A visitar · sem posição no mapa') : `${st === 'vencida' ? 'Vencida' : ehRetorno(a.l) ? 'Retorno' : 'Agendada'} ${CURTO(a.l.dataAgendada)}`;
     const ct = st === 'agendada' ? '#B36200' : st === 'pendente' ? 'var(--tinta2)' : cor;
     return `<button class="card ${a.k === selKey ? 'sel' : ''}" data-k="${a.k}" style="--c:${cor};--ct:${ct}"><span class="n">${ordem[a.k]}</span><span><strong>${esc(a.l.nome)}</strong><small>${linha2}</small></span></button>`;
   };
@@ -1017,10 +1078,12 @@ function ordenar(arr){
 function filtradas(){
   const q = $('busca').value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const fs = $('fStatus').value, fc = $('fCidade').value;
+  const fv = $('fVezes').value;
   return ordenar(Object.entries(lojas).filter(([k,l]) => {
     const s = statusEf(l);
     if (fs !== 'todas' && fs !== s) return false;
     if (fc && l.cidade !== fc) return false;
+    if (fv !== '' && (fv === '3' ? nVis(l) < 3 : nVis(l) !== +fv)) return false;
     if (q) {
       const alvo = `${l.num} ${l.nome} ${l.cidade}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
       if (!alvo.includes(q)) return false;
@@ -1041,11 +1104,13 @@ function render(){
   const c = {visitada:0, agendada:0, vencida:0, pendente:0};
   todas.forEach(l => c[statusEf(l)]++);
   const agTotal = c.agendada + c.vencida;
-  const pct = t ? Math.round(c.visitada / t * 100) : 0;
+  const cob = todas.filter(l => nVis(l) > 0).length, totVis = todas.reduce((s, l) => s + nVis(l), 0);
+  const pct = t ? Math.round(cob / t * 100) : 0;
+  c.cob = cob;
 
-  let tit = c.visitada === 0
+  let tit = cob === 0
     ? `Nenhuma das ${num(t)} lojas visitada ainda`
-    : `${num(c.visitada)} de ${num(t)} lojas visitadas (${pct}%)`;
+    : `${num(cob)} de ${num(t)} lojas já visitadas (${pct}%)`;
   if (c.vencida) tit += `, ${num(c.vencida)} ${c.vencida === 1 ? 'vencida' : 'vencidas'}`;
   else if (agTotal) tit += `, ${num(agTotal)} ${agTotal === 1 ? 'agendada' : 'agendadas'}`;
   const rc = ROTEIROS.filter(r => resumoRot(r.id).estado === 'concluido').length;
@@ -1054,7 +1119,7 @@ function render(){
 
   const prox = todas.filter(l => statusEf(l) === 'agendada').sort((a,b) => a.dataAgendada.localeCompare(b.dataAgendada))[0];
   $('subtitulo').textContent = `${num(rc)} de ${num(ROTEIROS.length)} roteiros concluídos. ` + (prox ? `Próxima visita: ${prox.nome} (${prox.cidade}) em ${br(prox.dataAgendada)}. ` : 'Nenhuma visita agendada. ')
-    + `Faltam ${num(c.pendente)} lojas sem data.` + (editor ? '' : ' Modo consulta.');
+    + `${num(totVis)} ${totVis === 1 ? 'visita feita' : 'visitas feitas'} no total. Faltam ${num(c.pendente)} lojas sem data.` + (editor ? '' : ' Modo consulta.');
 
   // trilha
   const ord = ordenar(Object.entries(lojas)).sort((a,b) => {
@@ -1072,7 +1137,7 @@ function render(){
     ['pendente', 'Sem data', c.pendente, '#8A948C'],
   ];
   $('kpis').innerHTML = k.map(([s,r,v,cor]) => `<button class="kpi ${kpiAtivo===s?'ativo':''}" data-s="${s}" style="--cor:${cor}"><b>${num(v)}</b><span>${r}</span></button>`).join('')
-    + `<div class="kpi" style="--cor:#0F4D1A;cursor:default"><b>${pct}%</b><span>Concluído</span><div class="barra"><i style="width:${pct}%"></i></div></div>`;
+    + `<div class="kpi" style="--cor:#0F4D1A;cursor:default"><b>${pct}%</b><span>Já visitadas (${num(cob)} de ${num(t)})</span><div class="barra"><i style="width:${pct}%"></i></div></div>`;
 
   // cidades
   const cidades = [...new Set(todas.map(l => l.cidade))].sort((a,b) => a.localeCompare(b,'pt-BR'));
@@ -1082,6 +1147,10 @@ function render(){
     return `<option value="${esc(ci)}">${esc(ci)} (${num(n)})</option>`;
   }).join('');
   fc.value = cidades.includes(atual) ? atual : '';
+  const cv = [0, 0, 0, 0]; todas.forEach(l => cv[Math.min(nVis(l), 3)]++);
+  const fvEl = $('fVezes'), fvAt = fvEl.value;
+  fvEl.innerHTML = `<option value="">Qualquer nº de visitas</option><option value="0">Nunca visitadas (${num(cv[0])})</option><option value="1">1 visita (${num(cv[1])})</option><option value="2">2 visitas (${num(cv[2])})</option><option value="3">3 ou mais visitas (${num(cv[3])})</option>`;
+  fvEl.value = fvAt;
 
   // lista
   const lista = filtradas();
@@ -1091,7 +1160,7 @@ function render(){
     const data = s === 'visitada' ? br(l.dataVisita) : (s === 'agendada' || s === 'vencida') ? br(l.dataAgendada) : '';
     return `<button class="item ${k===selKey?'sel':''}" data-k="${k}">
       <i style="background:${COR[s]}"></i>
-      <span><strong>${l.num} · ${esc(l.nome)}</strong><small>${esc(l.cidade)}</small>${pendTxt(l)}${seg2Html(l)}</span>
+      <span><strong>${l.num} · ${esc(l.nome)}</strong><small>${esc(l.cidade)}</small>${pendTxt(l)}${vezesHtml(l)}</span>
       <span class="st" style="color:${s==='pendente'?'var(--tinta2)':COR[s]}">${ROTULO[s]}<small>${data}</small></span>
     </button>`;
   }).join('') : '<div class="vazio">Nenhuma loja com esses filtros. Limpe os filtros para ver todas.</div>';
@@ -1108,14 +1177,14 @@ function render(){
 }
 
 /* ---------- GAVETA: LOJA ---------- */
-let rascunho = null;
+let editVis = null, relAlvo = null;
 function abrirLoja(k){
   const l = lojas[k]; if (!l) return;
   if (relRascunho && relRascunho.k !== k && relRascunho.img && !confirm('O relatório da outra loja ainda não foi salvo. Descartar?')) return;
   sairModoNova();
+  if (editVis && editVis.k !== k) editVis = null;
   selKey = k; modo = 'loja';
   if (relRascunho && relRascunho.k !== k) relRascunho = null;
-  rascunho = {status: l.status || 'pendente', dataAgendada: l.dataAgendada || '', dataVisita: l.dataVisita || '', dataAgendada2: l.dataAgendada2 || '', dataVisita2: l.dataVisita2 || '', obs: l.obs || ''};
   $('gTitulo').textContent = `${l.num} · ${l.nome}`;
   $('gSub').textContent = `Loja ${l.num} · ${l.cidade}${ROT_ID[rotDe(l)] ? ' · roteiro ' + ROT_ID[rotDe(l)].nome : ''}${l.cnpj ? ' · CNPJ ' + l.cnpj : ''}`;
   desenharForm(k);
@@ -1124,103 +1193,164 @@ function abrirLoja(k){
   if (regSel) regSel = regDe(l) || null;
   render();
 }
+function desenharSelos(k){
+  const l = lojas[k], box = $('gSelos'); if (!box) return;
+  if (!l) { box.innerHTML = ''; return; }
+  const n = nVis(l), p = proxAgenda(l), venc = p && p.dataAgendada < hoje();
+  box.innerHTML = `<span class="selo ${n ? '' : 'zero'}"><b>${num(n)}</b>${n === 1 ? 'visita feita' : 'visitas feitas'}</span>`
+    + (l.dataVisita ? `<span class="selo txt">Última ${br(l.dataVisita)}</span>` : '')
+    + (p ? `<span class="selo txt ${venc ? 'venc' : 'prox'}">${venc ? 'Vencida' : 'Próxima'} ${br(p.dataAgendada)}</span>` : '');
+}
+function cardVisita(v){
+  const st = v.status === 'agendada' && v.dataAgendada < hoje() ? 'vencida' : v.status;
+  const datas = v.status === 'visitada'
+    ? `Feita em ${br(v.dataVisita)}${v.dataAgendada && v.dataAgendada !== v.dataVisita ? ' · estava agendada para ' + br(v.dataAgendada) : ''}`
+    : `Agendada para ${br(v.dataAgendada)}${st === 'vencida' ? ' · a data já passou' : ''}`;
+  return `<div class="vis" style="--c:${COR[st]}">
+    <div class="vis-cab"><strong>${v.n}ª visita</strong><span class="tag" style="--c:${COR[st]}">${ROTULO[st]}</span></div>
+    <div class="vis-datas">${datas}</div>
+    ${v.obs ? `<p class="vis-obs">${esc(v.obs)}</p>` : ''}
+    <div class="rel-lista" data-rels="${v.id}"></div>
+    ${editor ? `<div class="vis-bts">
+      ${v.status === 'agendada' ? `<button type="button" data-feita="${v.id}">Marcar como feita</button>` : `<button type="button" data-rel="${v.id}">Subir relatório</button>`}
+      <button type="button" data-editar="${v.id}">Editar</button></div>` : ''}
+  </div>`;
+}
+function formVisita(e, v){
+  const total = (lojas[e.k]._vis || []).length;
+  const titulo = v ? `${v.n}ª visita` : `Nova visita (${total + 1}ª)`;
+  return `<div class="vis vis-form" style="--c:${COR[e.status]}">
+    <div class="vis-cab"><strong>${titulo}</strong>${v ? '<button type="button" class="link" id="vExcluir" style="margin:0;color:var(--tomate)">Excluir visita</button>' : ''}</div>
+    <label>Situação</label>
+    <div class="seg dois" id="vSeg">${['agendada','visitada'].map(s => `<button type="button" data-s="${s}" aria-pressed="${e.status === s}">${s === 'agendada' ? 'Agendada' : 'Feita'}</button>`).join('')}</div>
+    <div class="dupla">
+      <div><label for="vAg">Data agendada</label><input type="date" id="vAg" value="${e.dataAgendada}"></div>
+      ${e.status === 'visitada' ? `<div><label for="vVi">Feita em</label><input type="date" id="vVi" value="${e.dataVisita}" max="${hoje()}"></div>` : '<div></div>'}
+    </div>
+    ${e.status === 'visitada' ? '<p class="dica">Se não teve agenda antes, pode deixar a data agendada em branco.</p>' : ''}
+    <label for="vObs">Observações desta visita</label>
+    <textarea id="vObs" placeholder="Pontos levantados, pendências, contato na loja">${esc(e.obs)}</textarea>
+  </div>`;
+}
 function desenharForm(k){
-  const l = lojas[k], r = rascunho, dis = editor ? '' : 'disabled';
+  const l = lojas[k];
+  desenharSelos(k);
+  const lista = (l._vis || []).slice().reverse();
+  const editando = editVis && editVis.k === k ? editVis : null;
+  const formNova = editando && !editando.id ? formVisita(editando, null) : '';
+  const cards = lista.map(v => editando && editando.id === v.id ? formVisita(editando, v) : cardVisita(v)).join('');
   $('gCorpo').innerHTML = `
     <div class="endereco">${esc(l.endereco)}</div>
     <div class="links">
       <a href="https://www.google.com/maps/dir/?api=1&destination=${l.lat},${l.lng}" target="_blank" rel="noopener">Traçar rota</a>
       <a href="https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}" target="_blank" rel="noopener">Abrir no Google Maps</a>
     </div>
-    <label>Status da visita</label>
-    <div class="seg" id="seg">
-      ${['pendente','agendada','visitada'].map(s => `<button type="button" data-s="${s}" aria-pressed="${r.status===s}" ${dis}>${ROTULO[s]}</button>`).join('')}
-    </div>
-    ${r.status !== 'pendente' ? `<div class="dupla">
-      <div><label for="dAg">Data agendada</label><input type="date" id="dAg" value="${r.dataAgendada}" ${dis}></div>
-      ${r.status === 'visitada' ? `<div><label for="dVi">Data da visita</label><input type="date" id="dVi" value="${r.dataVisita}" ${dis}></div>` : '<div></div>'}
-    </div>
-    <div class="seg2-box">
-      <h4>2ª agenda nesta loja (retorno)</h4>
-      <div class="dupla">
-        <div><label for="dAg2">Data da 2ª agenda</label><input type="date" id="dAg2" value="${r.dataAgendada2}" ${dis}></div>
-        ${r.dataAgendada2 ? `<div><label for="dVi2">2ª visita feita em</label><input type="date" id="dVi2" value="${r.dataVisita2}" ${dis}></div>` : '<div></div>'}
-      </div>
-      <p class="dica">Opcional. Para remover, apague a data.</p>
-    </div>` : ''}
-    <label for="obs">Observações</label>
-    <textarea id="obs" placeholder="Pontos levantados, pendências, contato na loja" ${dis}>${esc(r.obs)}</textarea>
-    ${editor ? '' : '<div class="bloqueio">Para marcar visita, entre com seu e-mail e senha.</div>'}
+    <div class="vis-topo"><h3>Histórico de visitas</h3></div>
+    ${formNova || cards ? `<div class="linha-tempo" id="linhaTempo">${formNova}${cards}</div>`
+      : `<div class="vazio-vis">Nenhuma visita ainda.${editor ? ' Toque em "Nova visita" para agendar a primeira.' : ''}</div>`}
+    ${!lista.length && l.obs ? `<label>Observação anterior</label><div class="endereco">${esc(l.obs)}</div>` : ''}
+    ${editor ? '' : '<div class="bloqueio">Para agendar ou marcar visita, entre com seu e-mail e senha.</div>'}
     <section class="rel" aria-labelledby="relTit">
-      <div class="rel-topo"><h3 id="relTit">Relatórios da visita</h3>${editor ? '<button type="button" class="btn claro peq" id="relNovo">Subir relatório</button>' : ''}</div>
+      <div class="rel-topo"><h3 id="relTit">Relatórios</h3>${editor ? '<button type="button" class="btn claro peq" id="relNovo">Subir relatório</button>' : ''}</div>
       <input type="file" id="relArq" accept="image/*" hidden>
       <div id="relForm"></div>
       <div class="rel-lista" id="relLista"><div class="dica">Carregando relatórios…</div></div>
     </section>
-    <div class="hist" id="hist"></div>`;
-  if ($('dAg2')) $('dAg2').onchange = () => { const tinha = !!rascunho.dataAgendada2; guardarCampos(); if (tinha !== !!rascunho.dataAgendada2) desenharForm(k); };
-  $('seg').querySelectorAll('button').forEach(b => b.onclick = () => {
-    guardarCampos();
-    rascunho.status = b.dataset.s;
-    if (rascunho.status === 'visitada' && !rascunho.dataVisita) rascunho.dataVisita = hoje();
+    <details class="hist" id="hist"><summary>Registro de alterações</summary><div id="histLista"><div class="dica">Carregando…</div></div></details>`;
+  if ($('vSeg')) $('vSeg').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    guardarCampos(); editVis.status = b.dataset.s;
+    if (editVis.status === 'visitada' && !editVis.dataVisita) editVis.dataVisita = editVis.dataAgendada && editVis.dataAgendada <= hoje() ? editVis.dataAgendada : hoje();
     desenharForm(k);
-  });
-  $('gRodape').innerHTML = editor
-    ? `${l.origem === 'nova' ? '<button class="btn perigo" id="gExcluir">Excluir loja</button>' : '<span></span>'}<button class="btn prim" id="gSalvar">Salvar visita</button>`
-    : `<span></span><button class="btn prim" id="gEntrar">Entrar para editar</button>`;
+  };
+  if ($('vExcluir')) $('vExcluir').onclick = () => excluirVisita(k, editVis.id);
+  if (!editor) $('gRodape').innerHTML = `<span></span><button class="btn prim" id="gEntrar">Entrar para editar</button>`;
+  else if (editando) $('gRodape').innerHTML = `<button class="btn" id="gCancelar" style="border-color:var(--linha)">Cancelar</button><button class="btn prim" id="gSalvar">Salvar visita</button>`;
+  else $('gRodape').innerHTML = `${l.origem === 'nova' ? '<button class="btn perigo" id="gExcluir">Excluir loja</button>' : '<span></span>'}<button class="btn prim" id="gNova">+ Nova visita</button>`;
   if ($('gSalvar')) $('gSalvar').onclick = () => salvarVisita(k);
+  if ($('gCancelar')) $('gCancelar').onclick = () => { editVis = null; desenharForm(k); };
+  if ($('gNova')) $('gNova').onclick = () => {
+    editVis = {k, id:null, status:'agendada', dataAgendada:'', dataVisita:'', obs:''};
+    desenharForm(k); $('gCorpo').scrollTop = 0; if ($('vAg')) $('vAg').focus();
+  };
   if ($('gExcluir')) $('gExcluir').onclick = () => excluirLoja(k);
   if ($('gEntrar')) $('gEntrar').onclick = abrirLogin;
-  if ($('relNovo')) $('relNovo').onclick = () => $('relArq').click();
+  if ($('relNovo')) $('relNovo').onclick = () => { relAlvo = null; $('relArq').click(); };
   $('relArq').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) prepararRelatorio(k, f); };
   desenharRelForm(k);
   carregarRelatorios(k);
   carregarHistorico(k);
 }
 function guardarCampos(){
-  if ($('dAg')) rascunho.dataAgendada = $('dAg').value;
-  if ($('dVi')) rascunho.dataVisita = $('dVi').value;
-  if ($('dAg2')) { rascunho.dataAgendada2 = $('dAg2').value; if (!rascunho.dataAgendada2) rascunho.dataVisita2 = ''; }
-  if ($('dVi2')) rascunho.dataVisita2 = $('dVi2').value;
-  if ($('obs')) rascunho.obs = $('obs').value;
+  if (!editVis) return;
+  if ($('vAg')) editVis.dataAgendada = $('vAg').value;
+  if ($('vVi')) editVis.dataVisita = $('vVi').value;
+  if ($('vObs')) editVis.obs = $('vObs').value;
+}
+function iniciarEdicao(k, id, feita){
+  guardarCampos();
+  const v = (lojas[k]._vis || []).find(x => x.id === id); if (!v) return;
+  const sugestao = v.dataAgendada && v.dataAgendada <= hoje() ? v.dataAgendada : hoje();
+  editVis = {k, id, status: feita ? 'visitada' : v.status, dataAgendada: v.dataAgendada || '', dataVisita: v.dataVisita || (feita ? sugestao : ''), obs: v.obs || ''};
+  desenharForm(k);
+}
+/* monta a gravação da loja inteira: lista de visitas + resumo (status = última visita) */
+function upDaLoja(k, lista){
+  const mp = {}, TS = firebase.database.ServerValue.TIMESTAMP;
+  lista.forEach(v => {
+    if (!v.id || String(v.id).startsWith('leg')) v.id = db.ref('lojas').push().key;
+    mp[v.id] = {status:v.status, dataAgendada:v.dataAgendada || '', dataVisita:v.status === 'visitada' ? (v.dataVisita || '') : '',
+      obs:String(v.obs || '').trim(), criadoEm:v.criadoEm || Date.now(), por:v.por || usuario.email};
+  });
+  const r = prepararLoja({migrado:true, historicoVisitas:mp});
+  return {[`lojas/${k}/historicoVisitas`]: mp, [`lojas/${k}/migrado`]: true,
+    [`lojas/${k}/dataAgendada2`]: null, [`lojas/${k}/dataVisita2`]: null,
+    [`lojas/${k}/status`]: r.status, [`lojas/${k}/dataAgendada`]: r.dataAgendada, [`lojas/${k}/dataVisita`]: r.dataVisita,
+    [`lojas/${k}/atualizadoEm`]: TS, [`lojas/${k}/atualizadoPor`]: usuario.email};
 }
 async function salvarVisita(k){
   guardarCampos();
-  if (relPendente(k) && !(await salvarRelatorio(k))) return;
-  const r = rascunho, antes = lojas[k].status || 'pendente';
-  if (r.status === 'agendada' && !r.dataAgendada) return toast('Informe a data agendada');
-  if (r.status === 'visitada' && !r.dataVisita) return toast('Informe a data da visita');
-  if (r.status === 'visitada' && r.dataVisita > hoje()) return toast('A data da visita não pode ser futura');
-  const usa2 = r.status !== 'pendente' && !!r.dataAgendada2;
-  if (usa2 && r.dataAgendada && r.dataAgendada2 <= r.dataAgendada) return toast('A 2ª agenda precisa ser depois da 1ª data');
-  if (usa2 && r.dataVisita2 && r.dataVisita2 > hoje()) return toast('A data da 2ª visita não pode ser futura');
-  const ant2 = (lojas[k].dataAgendada2 || '') + '|' + (lojas[k].dataVisita2 || '');
-  const dados = {
-    status: r.status,
-    dataAgendada: r.status === 'pendente' ? '' : r.dataAgendada,
-    dataVisita: r.status === 'visitada' ? r.dataVisita : '',
-    dataAgendada2: usa2 ? r.dataAgendada2 : '',
-    dataVisita2: usa2 ? (r.dataVisita2 || '') : '',
-    obs: r.obs.trim(),
-    atualizadoEm: firebase.database.ServerValue.TIMESTAMP,
-    atualizadoPor: usuario.email
-  };
+  const e = editVis; if (!e || e.k !== k) return;
+  if (e.status === 'agendada' && !e.dataAgendada) return toast('Informe a data agendada');
+  if (e.status === 'visitada' && !e.dataVisita) return toast('Informe a data em que a visita foi feita');
+  if (e.status === 'visitada' && e.dataVisita > hoje()) return toast('A data da visita não pode ser futura');
+  const l = lojas[k], outras = (l._vis || []).filter(v => v.id !== e.id);
+  if (!e.id && e.status === 'agendada') {
+    const aberta = outras.find(v => v.status === 'agendada');
+    if (aberta && !confirm(`A ${aberta.n}ª visita já está agendada para ${br(aberta.dataAgendada)}. Agendar mais uma?`)) return;
+  }
+  if (e.status === 'visitada' && outras.some(v => v.status === 'visitada' && v.dataVisita === e.dataVisita)
+      && !confirm(`Já existe visita feita em ${br(e.dataVisita)}. Salvar mesmo assim?`)) return;
+  const antiga = e.id ? (l._vis || []).find(v => v.id === e.id) : null;
+  const nova = {...(antiga || {}), id:e.id, status:e.status, dataAgendada:e.dataAgendada || (e.status === 'visitada' ? e.dataVisita : ''), dataVisita:e.dataVisita, obs:e.obs};
+  if (!antiga) { nova.criadoEm = Date.now(); nova.por = usuario.email; }
+  const up = upDaLoja(k, [...outras.map(v => ({...v})), nova]);
+  up[`historico/${db.ref('historico').push().key}`] = {key:k, de: antiga ? `${antiga.n}ª visita` : 'Nova visita', para: e.status === 'visitada' ? 'feita' : 'agendada',
+    data: e.status === 'visitada' ? e.dataVisita : e.dataAgendada, em: firebase.database.ServerValue.TIMESTAMP, por: usuario.email};
+  const b = $('gSalvar'); if (b) { b.disabled = true; b.textContent = 'Salvando…'; }
   try {
-    await db.ref('lojas/' + k).update(dados);
-    await db.ref('historico').push({key:k, de:antes, para:r.status, data: r.status==='visitada'?r.dataVisita:r.dataAgendada, em: firebase.database.ServerValue.TIMESTAMP, por: usuario.email});
-    if (ant2 !== dados.dataAgendada2 + '|' + dados.dataVisita2)
-      await db.ref('historico').push({key:k, de:'2ª agenda', para: !dados.dataAgendada2 ? 'removida' : dados.dataVisita2 ? 'visita feita' : 'marcada', data: dados.dataVisita2 || dados.dataAgendada2 || '', em: firebase.database.ServerValue.TIMESTAMP, por: usuario.email});
-    toast('Visita salva');
-    fecharGaveta();
-  } catch(e){ toast('Não salvou: ' + (e.code || e.message)); }
+    await db.ref().update(up);
+    editVis = null;
+    toast(antiga ? 'Visita atualizada' : e.status === 'visitada' ? 'Visita registrada' : 'Visita agendada');
+    if (selKey === k && modo === 'loja') desenharForm(k);
+  } catch(err){ toast('Não salvou: ' + (err.code || err.message)); if (b) { b.disabled = false; b.textContent = 'Salvar visita'; } }
+}
+async function excluirVisita(k, id){
+  const l = lojas[k], v = (l._vis || []).find(x => x.id === id); if (!v) return;
+  if (!confirm(`Excluir a ${v.n}ª visita (${br(refData(v))})? Os relatórios dela continuam guardados na loja.`)) return;
+  const up = upDaLoja(k, l._vis.filter(x => x.id !== id).map(x => ({...x})));
+  up[`historico/${db.ref('historico').push().key}`] = {key:k, de:`${v.n}ª visita`, para:'excluída', data:refData(v), em: firebase.database.ServerValue.TIMESTAMP, por: usuario.email};
+  try { await db.ref().update(up); editVis = null; toast('Visita excluída'); if (selKey === k) desenharForm(k); }
+  catch(err){ toast('Não excluiu: ' + (err.code || err.message)); }
 }
 function carregarHistorico(k){
-  db.ref('historico').orderByChild('key').equalTo(k).limitToLast(5).once('value').then(s => {
+  db.ref('historico').orderByChild('key').equalTo(k).limitToLast(10).once('value').then(s => {
     const h = []; s.forEach(c => { h.push(c.val()); });
-    if (!h.length || selKey !== k || !$('hist')) return;
-    $('hist').innerHTML = '<h3>Últimas alterações</h3>' + h.reverse().map(x =>
-      `<div>${new Date(x.em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}: ${ROTULO[x.de]||x.de} para ${ROTULO[x.para]||x.para}${x.data ? ' (' + br(x.data) + ')' : ''}, por ${esc(x.por)}</div>`).join('');
-  }).catch(() => {});
+    if (selKey !== k || !$('histLista')) return;
+    $('histLista').innerHTML = h.length ? h.reverse().map(x =>
+      `<div>${new Date(x.em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}: ${esc(ROTULO[x.de]||x.de)} para ${esc(ROTULO[x.para]||x.para)}${x.data ? ' (' + br(x.data) + ')' : ''}, por ${esc(x.por)}</div>`).join('')
+      : '<div>Nenhuma alteração registrada.</div>';
+  }).catch(() => { if ($('histLista')) $('histLista').innerHTML = '<div>Não consegui carregar.</div>'; });
 }
 async function excluirLoja(k){
   const l = lojas[k];
@@ -1258,10 +1388,12 @@ async function comprimirImagem(arq, larguraMax = 1920, qualidade = 0.8){
 
 async function prepararRelatorio(k, arq){
   if (!/^image\//.test(arq.type)) return toast('Escolha uma imagem (JPG ou PNG). Exporte o slide como imagem.');
-  const l = lojas[k];
+  const l = lojas[k], v = relAlvo ? (l._vis || []).find(x => x.id === relAlvo) : null;
+  relAlvo = null;
   relRascunho = {k, processando:true, nomeArq: arq.name, kbAntes: Math.round(arq.size / 1024),
-    data: l.dataVisita || hoje(), status:'', pend:'', prazo:''};
+    data: (v && v.dataVisita) || l.dataVisita || hoje(), status:'', pend:'', prazo:'', visitaId: v ? v.id : null};
   desenharRelForm(k);
+  if ($('relForm')) $('relForm').scrollIntoView({block:'nearest', behavior:'smooth'});
   try {
     const c = await comprimirImagem(arq);
     if (!relRascunho || relRascunho.k !== k) return;
@@ -1280,6 +1412,7 @@ function desenharRelForm(k){
     <div class="rel-prev"><img src="${r.thumb}" alt="Prévia do relatório">
       <div><strong>${esc(r.nomeArq)}</strong><small>${num(r.kbAntes)} KB para ${num(r.kbDepois)} KB · ${num(r.w)} x ${num(r.h)} pixels</small>
       ${menos > 0 ? `<span class="reducao">${menos}% menor</span>` : ''}</div></div>
+    ${r.visitaId && (lojas[k]._vis || []).find(x => x.id === r.visitaId) ? `<p class="dica">Vai ficar guardado na ${(lojas[k]._vis || []).find(x => x.id === r.visitaId).n}ª visita.</p>` : ''}
     <div class="dupla">
       <div><label for="rData">Data da visita</label><input type="date" id="rData" value="${r.data}" max="${hoje()}"></div>
       <div><label for="rPrazo">Prazo para a loja</label><input type="date" id="rPrazo" value="${r.prazo}"></div>
@@ -1315,24 +1448,27 @@ async function salvarRelatorio(k){
   if (r.prazo && r.prazo < r.data) return falha('Relatório: o prazo não pode ser antes da visita');
   if ($('rSalvar')) { $('rSalvar').disabled = true; $('rSalvar').textContent = 'Salvando…'; }
   const id = db.ref('visitas/' + k).push().key, TS = firebase.database.ServerValue.TIMESTAMP;
+  /* liga o relatório a uma visita: a escolhida, a feita no mesmo dia, uma agenda já vencida, ou cria uma visita feita */
+  const vis = (l._vis || []).map(x => ({...x}));
+  let alvo = (r.visitaId && vis.find(x => x.id === r.visitaId))
+    || vis.find(x => x.status === 'visitada' && x.dataVisita === r.data)
+    || vis.filter(x => x.status === 'agendada' && x.dataAgendada <= hoje()).pop();
+  let mudou = '';
+  if (!alvo) { alvo = {id:null, status:'visitada', dataAgendada:'', dataVisita:r.data, obs:'', criadoEm:Date.now(), por:usuario.email}; vis.push(alvo); mudou = 'Nova visita'; }
+  else if (alvo.status === 'agendada') { alvo.status = 'visitada'; alvo.dataVisita = r.data; mudou = `${alvo.n}ª visita`; }
+  const up = upDaLoja(k, vis);
   const meta = {data:r.data, status:r.status, pendencias:r.pend.trim(), prazo:r.prazo || '', thumb:r.thumb,
-    kb:r.kbDepois, w:r.w, h:r.h, criadoEm:Date.now(), por:usuario.email};
-  const up = {};
+    kb:r.kbDepois, w:r.w, h:r.h, criadoEm:Date.now(), por:usuario.email, visitaId:alvo.id};
   up[`visitas/${k}/${id}`] = {...meta, criadoEm:TS};
   up[`imagens/${id}`] = {k, img:r.img};
   up[`lojas/${k}/ultimoRel`] = resumoUltimo([...(relCache[k] || []), {id, ...meta}]);
-  if (l.status !== 'visitada' || (l.dataVisita || '') < r.data){
-    up[`lojas/${k}/status`] = 'visitada'; up[`lojas/${k}/dataVisita`] = r.data;
-    up[`lojas/${k}/atualizadoEm`] = TS; up[`lojas/${k}/atualizadoPor`] = usuario.email;
-    if (l.status !== 'visitada')
-      up[`historico/${db.ref('historico').push().key}`] = {key:k, de:l.status || 'pendente', para:'visitada', data:r.data, em:TS, por:usuario.email};
-  }
+  if (mudou) up[`historico/${db.ref('historico').push().key}`] = {key:k, de:mudou, para:'feita', data:r.data, em:TS, por:usuario.email};
   try {
     await db.ref().update(up);
     imgCache.set(id, r.img);
     relRascunho = null;
     toast('Relatório salvo');
-    desenharRelForm(k); carregarRelatorios(k, true);
+    desenharRelForm(k); relCache[k] = [...(relCache[k] || []), {id, ...meta}]; carregarRelatorios(k, true);
     return true;
   } catch(e){
     toast('Relatório não salvou: ' + (e.code || e.message));
@@ -1350,26 +1486,30 @@ function carregarRelatorios(k, forcar){
   }).catch(() => { if (selKey === k && $('relLista')) $('relLista').innerHTML = '<div class="dica">Não consegui carregar os relatórios.</div>'; });
 }
 
+function relCardHtml(v){
+  const s = SEMAFORO[v.status] || SEMAFORO.verde;
+  const venc = v.prazo && v.prazo < hoje() && v.status !== 'verde';
+  return `<div class="rel-card" style="--c:${s.cor}">
+    <button type="button" class="mini-img" data-ver="${v.id}" aria-label="Abrir relatório de ${br(v.data)}"><img src="${v.thumb}" alt=""></button>
+    <div><strong>Relatório de ${br(v.data)}</strong><span class="tag">${s.rot}</span>
+      ${v.pendencias ? `<p>${esc(v.pendencias)}</p>` : ''}
+      ${v.prazo ? `<small class="${venc ? 'venc' : ''}">Prazo ${br(v.prazo)}${venc ? ' · vencido' : ''}</small>` : ''}
+      <div class="rel-bts"><button type="button" data-ver="${v.id}">Ver relatório</button>${editor ? `<button type="button" class="apagar" data-apagar="${v.id}">Excluir</button>` : ''}</div>
+    </div></div>`;
+}
 function desenharRelLista(k){
   const box = $('relLista'); if (!box || selKey !== k) return;
   const lista = (relCache[k] || []).slice().sort((a, b) => (b.data || '').localeCompare(a.data || '') || (b.criadoEm || 0) - (a.criadoEm || 0));
-  if (!lista.length && relRascunho && relRascunho.k === k){ box.innerHTML = ''; return; }
-  if (!lista.length){ box.innerHTML = `<div class="dica">${editor ? 'Nenhum relatório ainda. Depois da visita, exporte o slide da loja como imagem e use "Subir relatório".' : 'Nenhum relatório desta loja ainda.'}</div>`; return; }
-  box.innerHTML = lista.map(v => {
-    const s = SEMAFORO[v.status] || SEMAFORO.verde;
-    const venc = v.prazo && v.prazo < hoje() && v.status !== 'verde';
-    return `<div class="rel-card" style="--c:${s.cor}">
-      <button type="button" class="mini-img" data-ver="${v.id}" aria-label="Abrir relatório de ${br(v.data)}"><img src="${v.thumb}" alt=""></button>
-      <div><strong>Visita de ${br(v.data)}</strong><span class="tag">${s.rot}</span>
-        ${v.pendencias ? `<p>${esc(v.pendencias)}</p>` : ''}
-        ${v.prazo ? `<small class="${venc ? 'venc' : ''}">Prazo ${br(v.prazo)}${venc ? ' · vencido' : ''}</small>` : ''}
-        <div class="rel-bts"><button type="button" data-ver="${v.id}">Ver relatório</button>${editor ? `<button type="button" class="apagar" data-apagar="${v.id}">Excluir</button>` : ''}</div>
-      </div></div>`;
-  }).join('');
-  box.onclick = e => {
-    const ver = e.target.closest('[data-ver]'); if (ver) return abrirVisor(k, ver.dataset.ver);
-    const ap = e.target.closest('[data-apagar]'); if (ap) excluirRelatorio(k, ap.dataset.apagar);
-  };
+  const vis = lojas[k]._vis || [], porVis = {}, soltos = [];
+  lista.forEach(r => {
+    const v = (r.visitaId && vis.find(x => x.id === r.visitaId)) || vis.find(x => x.status === 'visitada' && x.dataVisita === r.data);
+    if (v) (porVis[v.id] = porVis[v.id] || []).push(r); else soltos.push(r);
+  });
+  document.querySelectorAll('#linhaTempo [data-rels]').forEach(el => { el.innerHTML = (porVis[el.dataset.rels] || []).map(relCardHtml).join(''); });
+  if (soltos.length) { box.innerHTML = '<div class="dica">Relatórios sem visita ligada:</div>' + soltos.map(relCardHtml).join(''); return; }
+  if (relRascunho && relRascunho.k === k) { box.innerHTML = ''; return; }
+  box.innerHTML = lista.length ? '<div class="dica">Os relatórios aparecem dentro de cada visita, no histórico acima.</div>'
+    : `<div class="dica">${editor ? 'Nenhum relatório ainda. Depois da visita, exporte o slide da loja como imagem e use "Subir relatório" na visita feita.' : 'Nenhum relatório desta loja ainda.'}</div>`;
 }
 
 async function excluirRelatorio(k, id){
@@ -1421,6 +1561,7 @@ function abrirNova(){
   selKey = null; modo = 'nova';
   $('gTitulo').textContent = 'Incluir loja';
   $('gSub').textContent = 'Ela entra no mapa como pendente.';
+  $('gSelos').innerHTML = '';
   $('gCorpo').innerHTML = `
     <div class="dupla">
       <div><label for="nNum">Nº da loja</label><input id="nNum" type="number" min="1" inputmode="numeric"></div>
@@ -1462,7 +1603,7 @@ async function salvarNova(){
   if (!cid) return err('Informe a cidade.');
   if (!coord) return err('Coordenadas inválidas ou fora do estado de SP. Use o formato -23.55, -46.63.');
   const nova = {num:n, nome, codigo:$('nCod').value.trim(), cnpj:$('nCnpj').value.trim(), endereco:$('nEnd').value.trim().replace(/\s+/g,' '),
-    cidade:cid, roteiro:$('nRot').value, lat:+coord[0].toFixed(6), lng:+coord[1].toFixed(6), origem:'nova', status:'pendente', dataAgendada:'', dataVisita:'', obs:'',
+    cidade:cid, roteiro:$('nRot').value, lat:+coord[0].toFixed(6), lng:+coord[1].toFixed(6), origem:'nova', migrado:true, status:'pendente', dataAgendada:'', dataVisita:'', obs:'',
     criadoEm: firebase.database.ServerValue.TIMESTAMP, criadoPor: usuario.email};
   try {
     await db.ref('lojas/L' + n).set(nova);
@@ -1481,6 +1622,7 @@ function relPendente(k){ return !!(relRascunho && relRascunho.k === k && relRasc
 function fecharGaveta(){
   if (selKey && relPendente(selKey) && !confirm('O relatório que você subiu ainda não foi salvo. Fechar e descartar?')) return;
   if (relRascunho && relRascunho.k === selKey) relRascunho = null;
+  editVis = null;
   $('gaveta').classList.remove('aberta'); $('gaveta').setAttribute('aria-hidden','true');
   sairModoNova(); selKey = null; modo = null; render();
 }
@@ -1489,6 +1631,17 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('vis
 
 /* ---------- EVENTOS ---------- */
 $('itens').onclick = e => { const b = e.target.closest('.item'); if (b) abrirLoja(b.dataset.k); };
+$('gCorpo').addEventListener('click', e => {
+  if (modo !== 'loja' || !selKey) return;
+  const b = e.target.closest('button'); if (!b) return;
+  const k = selKey, d = b.dataset;
+  if (d.ver) return abrirVisor(k, d.ver);
+  if (d.apagar) return excluirRelatorio(k, d.apagar);
+  if (d.editar) return iniciarEdicao(k, d.editar);
+  if (d.feita) return iniciarEdicao(k, d.feita, true);
+  if (d.rel) { relAlvo = d.rel; $('relArq').click(); }
+});
+$('fVezes').onchange = render;
 $('painelRot').onclick = e => {
   const it = e.target.closest('.item'); if (it) return abrirLoja(it.dataset.k);
   const r = e.target.closest('.rot'); if (r) selecionarRoteiro(r.dataset.r);
@@ -1508,11 +1661,16 @@ $('fCidade').onchange = () => {
   const pts = Object.values(lojas).filter(l => !v || l.cidade === v).map(l => [l.lat, l.lng]);
   if (v && pts.length) mapa.fitBounds(pts); else if (!v) mapa.fitBounds(SP_BOUNDS);
 };
-$('limpar').onclick = () => { $('busca').value=''; $('fStatus').value='todas'; $('fCidade').value=''; kpiAtivo='todas'; render(); mapa.fitBounds(SP_BOUNDS); };
+$('limpar').onclick = () => { $('busca').value=''; $('fStatus').value='todas'; $('fCidade').value=''; $('fVezes').value=''; kpiAtivo='todas'; render(); mapa.fitBounds(SP_BOUNDS); };
 $('btnNova').onclick = abrirNova;
 $('btnCsv').onclick = () => {
-  const cab = ['Nº loja','Loja','Roteiro','Cidade','Código','CNPJ','Endereço','Status','Data agendada','Data visita','2ª agenda','2ª visita feita','Observações','Latitude','Longitude'];
-  const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),br(l.dataAgendada2),br(l.dataVisita2),l.obs,String(l.lat).replace('.',','),String(l.lng).replace('.',',')]);
+  const cab = ['Nº loja','Loja','Roteiro','Cidade','Código','CNPJ','Endereço','Status (última visita)','Data agendada','Última visita feita','Visitas feitas','Próxima agenda','Histórico de visitas','Observações','Latitude','Longitude'];
+  const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => {
+    const vs = l._vis || [], p = proxAgenda(l);
+    const histV = vs.map(v => `${v.n}ª ${v.status === 'visitada' ? 'feita ' + br(v.dataVisita) : 'agendada ' + br(v.dataAgendada)}`).join('; ');
+    const obsV = vs.filter(v => v.obs).map(v => `${v.n}ª: ${v.obs}`).join(' | ') || l.obs || '';
+    return [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),nVis(l),p ? br(p.dataAgendada) : '',histV,obsV,String(l.lat).replace('.',','),String(l.lng).replace('.',',')];
+  });
   const csv = '\ufeff' + [cab, ...linhas].map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
@@ -1560,7 +1718,7 @@ $('formLogin').onsubmit = async e => {
   }
 };
 function atualizarCapa(c, rc){
-  $('cVis').textContent = `${num(c.visitada)} de ${num(Object.keys(lojas).length)}`;
+  $('cVis').textContent = `${num(c.cob || 0)} de ${num(Object.keys(lojas).length)}`;
   $('cRot').textContent = `${num(rc)} de ${num(ROTEIROS.length)}`;
   const prox = Object.values(lojas).filter(l => statusEf(l) === 'agendada').sort((a, b) => a.dataAgendada.localeCompare(b.dataAgendada))[0];
   $('cProx').textContent = prox ? br(prox.dataAgendada).slice(0, 5) + ' · ' + ((ROT_ID[rotDe(prox)] || {}).nome || prox.nome) : 'sem data';
@@ -1570,12 +1728,13 @@ function atualizarCapa(c, rc){
 
 /* desenha a base na hora, mesmo sem banco */
 lojas = JSON.parse(JSON.stringify(SEED));
+prepararTodas();
 render();
 mapa.fitBounds(SP_BOUNDS);
 
 if (semBanco) $('subtitulo').textContent = 'Sem conexão com o banco (gstatic.com bloqueado). Mostrando a base local, sem salvar.';
 
-let refLojas = null;
+let refLojas = null, carregouBanco = false;
 auth.onAuthStateChanged(u => {
   if (!u) { auth.signInAnonymously().catch(e => { $('subtitulo').textContent = 'Sem conexão com o banco (' + e.code + '). Mostrando a base local, sem salvar.'; }); return; }
   usuario = u; editor = !u.isAnonymous;
@@ -1587,12 +1746,24 @@ auth.onAuthStateChanged(u => {
       lojas = JSON.parse(JSON.stringify(SEED));
       if (editor) db.ref('lojas').transaction(atual => atual === null ? SEED : undefined).then(() => toast('Base com 75 lojas gravada no banco'));
     } else lojas = v;
+    prepararTodas();
+    carregouBanco = !!v;
+    migrarLegado();
     carregou = true;
     if (selKey && !lojas[selKey]) fecharGaveta();
         render();
     if (selKey && modo === 'loja') { guardarCampos(); desenharForm(selKey); }
   }, e => { $('subtitulo').textContent = 'Sem acesso ao banco (' + e.code + '). Mostrando a base local, sem salvar.'; });
 });
+/* uma vez por sessão de editor: passa a 1ª visita e a 2ª agenda do formato antigo para o histórico de visitas */
+let migrou = false;
+function migrarLegado(){
+  if (migrou || !editor || !carregouBanco) return;
+  migrou = true;
+  const up = {};
+  Object.entries(lojas).forEach(([k, l]) => { if (!l.migrado && (l._vis || []).length) Object.assign(up, upDaLoja(k, l._vis.map(x => ({...x})))); });
+  if (Object.keys(up).length) db.ref().update(up).then(() => toast('Visitas antigas passadas para o novo histórico')).catch(() => { migrou = false; });
+}
 </script>
 </body>
 </html>
