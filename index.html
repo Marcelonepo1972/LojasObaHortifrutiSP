@@ -330,6 +330,8 @@ header p{margin:2px 0 0;color:var(--tinta2);font-size:14px}
 .vis-cab .tag{margin:0}
 .vis-datas{font-size:13px;color:var(--tinta2);margin-top:2px}
 .vis-obs{margin:6px 0 0;font-size:13.5px;white-space:pre-line}
+.vis-resp{font-size:13px;margin-top:3px;color:var(--tinta)}
+.vis-resp b{font-weight:800}
 .vis-bts{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:4px}
 .vis-bts button{border:0;background:none;padding:8px 0;font-size:13.5px;font-weight:800;color:var(--verde)}
 .vis-bts button.apagar{color:var(--tomate)}
@@ -502,6 +504,9 @@ const hoje = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTi
 const br = iso => iso ? iso.split('-').reverse().join('/') : '';
 /* ---------- VISITAS: várias por loja. Status da loja = última visita ---------- */
 const refData = v => (v.status === 'visitada' ? v.dataVisita : v.dataAgendada) || '';
+/* responsável pela visita: nomes já usados viram sugestão no campo */
+const respsConhecidos = () => [...new Set(Object.values(lojas).flatMap(l => (l._vis || []).map(v => String(v.resp || '').trim())).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+const dlResp = () => `<datalist id="dlResp">${respsConhecidos().map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
 function visitasLegado(l){ /* formato antigo: 1 visita + 2ª agenda */
   const out = [];
   if (l.status === 'visitada' && l.dataVisita) out.push({id:'leg1', status:'visitada', dataAgendada:l.dataAgendada || '', dataVisita:l.dataVisita, obs:l.obs || '', criadoEm:1});
@@ -903,6 +908,8 @@ function sairRoteiro(){ rotSel = null; render(); if (!regSel) mapa.fitBounds(SP_
 async function agendarRoteiro(id){
   const data = $('rData').value;
   if (!data) return toast('Escolha a data do roteiro');
+  const resp = ($('rResp') ? $('rResp').value : '').trim();
+  if (!resp) return toast('Informe o responsável pela visita');
   if (data < hoje() && !confirm('A data escolhida já passou. Agendar mesmo assim?')) return;
   const ls = lojasDoRoteiro(id);
   let alvo = ls.filter(([k, l]) => statusEf(l) !== 'visitada'), rodada = false;
@@ -914,14 +921,16 @@ async function agendarRoteiro(id){
   alvo.forEach(([k, l]) => {
     const vis = (l._vis || []).map(x => ({...x}));
     const aberta = vis.filter(x => x.status === 'agendada').pop();
-    if (aberta && !rodada) aberta.dataAgendada = data;
-    else vis.push({id:null, status:'agendada', dataAgendada:data, dataVisita:'', obs:'', criadoEm:Date.now(), por:usuario.email});
+    if (aberta && !rodada) { aberta.dataAgendada = data; aberta.resp = resp; }
+    else vis.push({id:null, status:'agendada', dataAgendada:data, dataVisita:'', obs:'', resp, criadoEm:Date.now(), por:usuario.email});
     Object.assign(up, upDaLoja(k, vis));
     up[`historico/${db.ref('historico').push().key}`] = {key:k, de:l.status || 'pendente', para:'agendada', data, em:TS, por:usuario.email, roteiro:id};
   });
-  try { await db.ref().update(up); toast(`${num(alvo.length)} lojas agendadas para ${br(data)}`); }
+  try { await db.ref().update(up); toast(`${num(alvo.length)} lojas agendadas para ${br(data)} com ${resp}`); }
   catch(e){ toast('Não salvou: ' + (e.code || e.message)); }
 }
+/* responsável da próxima visita agendada; se não houver, da última feita */
+function respDaLoja(l){ const p = proxAgenda(l); const vs = l._vis || []; const f = vs.filter(v => v.status === 'visitada').pop(); return ((p && p.resp) || (f && f.resp) || '').trim(); }
 function renderRoteiros(){
   const box = $('painelRot');
   if (!rotSel) {
@@ -945,7 +954,7 @@ function renderRoteiros(){
       <h3>${esc(r.nome)}</h3>
       <p>${num(s.v)} de ${num(s.n)} lojas visitadas · ${esc(r.grupo)}</p>
       <div class="rot-acoes">
-        ${editor ? `<input type="date" id="rData" value="${s.proxData || ''}" aria-label="Data do roteiro"><button class="btn prim" id="rAgendar">Agendar roteiro</button>` : ''}
+        ${editor ? `<input type="date" id="rData" value="${s.proxData || ''}" aria-label="Data do roteiro"><input id="rResp" list="dlResp" placeholder="Responsável pela visita" aria-label="Responsável pela visita" autocomplete="off">${dlResp()}<button class="btn prim" id="rAgendar">Agendar roteiro</button>` : ''}
         <a class="btn claro" href="${rotaGoogle(rotSel)}" target="_blank" rel="noopener">Abrir rota no Google Maps</a>
       </div>
       ${editor ? '<p class="dica">Agendar aplica a data em todas as lojas do roteiro que ainda não foram visitadas. Se todas já foram, cria uma nova rodada.</p>' : ''}
@@ -955,7 +964,7 @@ function renderRoteiros(){
       const data = st === 'visitada' ? br(l.dataVisita) : (st === 'agendada' || st === 'vencida') ? br(l.dataAgendada) : '';
       return `<button class="item ${k === selKey ? 'sel' : ''}" data-k="${k}">
         <i style="background:${COR[st]}"></i>
-        <span><strong>${i + 1} · ${esc(l.nome)}</strong><small>Loja ${l.num} · ${esc(l.cidade)}</small>${vezesHtml(l)}</span>
+        <span><strong>${i + 1} · ${esc(l.nome)}</strong><small>Loja ${l.num} · ${esc(l.cidade)}${respDaLoja(l) ? ' · ' + esc(respDaLoja(l)) : ''}</small>${vezesHtml(l)}</span>
         <span class="st" style="color:${st === 'pendente' ? 'var(--tinta2)' : COR[st]}">${ROTULO[st]}<small>${data}</small></span>
       </button>`;
     }).join('')}`;
@@ -1199,7 +1208,7 @@ function desenharSelos(k){
   const n = nVis(l), p = proxAgenda(l), venc = p && p.dataAgendada < hoje();
   box.innerHTML = `<span class="selo ${n ? '' : 'zero'}"><b>${num(n)}</b>${n === 1 ? 'visita feita' : 'visitas feitas'}</span>`
     + (l.dataVisita ? `<span class="selo txt">Última ${br(l.dataVisita)}</span>` : '')
-    + (p ? `<span class="selo txt ${venc ? 'venc' : 'prox'}">${venc ? 'Vencida' : 'Próxima'} ${br(p.dataAgendada)}</span>` : '');
+    + (p ? `<span class="selo txt ${venc ? 'venc' : 'prox'}">${venc ? 'Vencida' : 'Próxima'} ${br(p.dataAgendada)}${p.resp ? ' · ' + esc(p.resp) : ''}</span>` : '');
 }
 function cardVisita(v){
   const st = v.status === 'agendada' && v.dataAgendada < hoje() ? 'vencida' : v.status;
@@ -1209,6 +1218,7 @@ function cardVisita(v){
   return `<div class="vis" style="--c:${COR[st]}">
     <div class="vis-cab"><strong>${v.n}ª visita</strong><span class="tag" style="--c:${COR[st]}">${ROTULO[st]}</span></div>
     <div class="vis-datas">${datas}</div>
+    <div class="vis-resp">Responsável: ${v.resp ? `<b>${esc(v.resp)}</b>` : '<span style="color:var(--tinta2)">não informado</span>'}</div>
     ${v.obs ? `<p class="vis-obs">${esc(v.obs)}</p>` : ''}
     <div class="rel-lista" data-rels="${v.id}"></div>
     ${editor ? `<div class="vis-bts">
@@ -1228,6 +1238,8 @@ function formVisita(e, v){
       ${e.status === 'visitada' ? `<div><label for="vVi">Feita em</label><input type="date" id="vVi" value="${e.dataVisita}" max="${hoje()}"></div>` : '<div></div>'}
     </div>
     ${e.status === 'visitada' ? '<p class="dica">Se não teve agenda antes, pode deixar a data agendada em branco.</p>' : ''}
+    <label for="vResp">${e.status === 'visitada' ? 'Quem fez a visita' : 'Responsável pela visita'}</label>
+    <input id="vResp" list="dlResp" value="${esc(e.resp || '')}" placeholder="Nome de quem vai à loja" autocomplete="off">${dlResp()}
     <label for="vObs">Observações desta visita</label>
     <textarea id="vObs" placeholder="Pontos levantados, pendências, contato na loja">${esc(e.obs)}</textarea>
   </div>`;
@@ -1270,7 +1282,7 @@ function desenharForm(k){
   if ($('gSalvar')) $('gSalvar').onclick = () => salvarVisita(k);
   if ($('gCancelar')) $('gCancelar').onclick = () => { editVis = null; desenharForm(k); };
   if ($('gNova')) $('gNova').onclick = () => {
-    editVis = {k, id:null, status:'agendada', dataAgendada:'', dataVisita:'', obs:''};
+    editVis = {k, id:null, status:'agendada', dataAgendada:'', dataVisita:'', obs:'', resp:''};
     desenharForm(k); $('gCorpo').scrollTop = 0; if ($('vAg')) $('vAg').focus();
   };
   if ($('gExcluir')) $('gExcluir').onclick = () => excluirLoja(k);
@@ -1286,12 +1298,13 @@ function guardarCampos(){
   if ($('vAg')) editVis.dataAgendada = $('vAg').value;
   if ($('vVi')) editVis.dataVisita = $('vVi').value;
   if ($('vObs')) editVis.obs = $('vObs').value;
+  if ($('vResp')) editVis.resp = $('vResp').value;
 }
 function iniciarEdicao(k, id, feita){
   guardarCampos();
   const v = (lojas[k]._vis || []).find(x => x.id === id); if (!v) return;
   const sugestao = v.dataAgendada && v.dataAgendada <= hoje() ? v.dataAgendada : hoje();
-  editVis = {k, id, status: feita ? 'visitada' : v.status, dataAgendada: v.dataAgendada || '', dataVisita: v.dataVisita || (feita ? sugestao : ''), obs: v.obs || ''};
+  editVis = {k, id, status: feita ? 'visitada' : v.status, dataAgendada: v.dataAgendada || '', dataVisita: v.dataVisita || (feita ? sugestao : ''), obs: v.obs || '', resp: v.resp || ''};
   desenharForm(k);
 }
 /* monta a gravação da loja inteira: lista de visitas + resumo (status = última visita) */
@@ -1300,7 +1313,7 @@ function upDaLoja(k, lista){
   lista.forEach(v => {
     if (!v.id || String(v.id).startsWith('leg')) v.id = db.ref('lojas').push().key;
     mp[v.id] = {status:v.status, dataAgendada:v.dataAgendada || '', dataVisita:v.status === 'visitada' ? (v.dataVisita || '') : '',
-      obs:String(v.obs || '').trim(), criadoEm:v.criadoEm || Date.now(), por:v.por || usuario.email};
+      obs:String(v.obs || '').trim(), resp:String(v.resp || '').trim(), criadoEm:v.criadoEm || Date.now(), por:v.por || usuario.email};
   });
   const r = prepararLoja({migrado:true, historicoVisitas:mp});
   return {[`lojas/${k}/historicoVisitas`]: mp, [`lojas/${k}/migrado`]: true,
@@ -1314,6 +1327,7 @@ async function salvarVisita(k){
   if (e.status === 'agendada' && !e.dataAgendada) return toast('Informe a data agendada');
   if (e.status === 'visitada' && !e.dataVisita) return toast('Informe a data em que a visita foi feita');
   if (e.status === 'visitada' && e.dataVisita > hoje()) return toast('A data da visita não pode ser futura');
+  if (!String(e.resp || '').trim()) return toast(e.status === 'visitada' ? 'Informe quem fez a visita' : 'Informe o responsável pela visita');
   const l = lojas[k], outras = (l._vis || []).filter(v => v.id !== e.id);
   if (!e.id && e.status === 'agendada') {
     const aberta = outras.find(v => v.status === 'agendada');
@@ -1322,7 +1336,7 @@ async function salvarVisita(k){
   if (e.status === 'visitada' && outras.some(v => v.status === 'visitada' && v.dataVisita === e.dataVisita)
       && !confirm(`Já existe visita feita em ${br(e.dataVisita)}. Salvar mesmo assim?`)) return;
   const antiga = e.id ? (l._vis || []).find(v => v.id === e.id) : null;
-  const nova = {...(antiga || {}), id:e.id, status:e.status, dataAgendada:e.dataAgendada || (e.status === 'visitada' ? e.dataVisita : ''), dataVisita:e.dataVisita, obs:e.obs};
+  const nova = {...(antiga || {}), id:e.id, status:e.status, dataAgendada:e.dataAgendada || (e.status === 'visitada' ? e.dataVisita : ''), dataVisita:e.dataVisita, obs:e.obs, resp:String(e.resp || '').trim()};
   if (!antiga) { nova.criadoEm = Date.now(); nova.por = usuario.email; }
   const up = upDaLoja(k, [...outras.map(v => ({...v})), nova]);
   up[`historico/${db.ref('historico').push().key}`] = {key:k, de: antiga ? `${antiga.n}ª visita` : 'Nova visita', para: e.status === 'visitada' ? 'feita' : 'agendada',
@@ -1664,12 +1678,12 @@ $('fCidade').onchange = () => {
 $('limpar').onclick = () => { $('busca').value=''; $('fStatus').value='todas'; $('fCidade').value=''; $('fVezes').value=''; kpiAtivo='todas'; render(); mapa.fitBounds(SP_BOUNDS); };
 $('btnNova').onclick = abrirNova;
 $('btnCsv').onclick = () => {
-  const cab = ['Nº loja','Loja','Roteiro','Cidade','Código','CNPJ','Endereço','Status (última visita)','Data agendada','Última visita feita','Visitas feitas','Próxima agenda','Histórico de visitas','Observações','Latitude','Longitude'];
+  const cab = ['Nº loja','Loja','Roteiro','Cidade','Código','CNPJ','Endereço','Status (última visita)','Data agendada','Última visita feita','Visitas feitas','Próxima agenda','Responsável próxima agenda','Histórico de visitas','Observações','Latitude','Longitude'];
   const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => {
     const vs = l._vis || [], p = proxAgenda(l);
-    const histV = vs.map(v => `${v.n}ª ${v.status === 'visitada' ? 'feita ' + br(v.dataVisita) : 'agendada ' + br(v.dataAgendada)}`).join('; ');
+    const histV = vs.map(v => `${v.n}ª ${v.status === 'visitada' ? 'feita ' + br(v.dataVisita) : 'agendada ' + br(v.dataAgendada)}${v.resp ? ' (' + v.resp + ')' : ''}`).join('; ');
     const obsV = vs.filter(v => v.obs).map(v => `${v.n}ª: ${v.obs}`).join(' | ') || l.obs || '';
-    return [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),nVis(l),p ? br(p.dataAgendada) : '',histV,obsV,String(l.lat).replace('.',','),String(l.lng).replace('.',',')];
+    return [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),nVis(l),p ? br(p.dataAgendada) : '',p ? (p.resp || '') : '',histV,obsV,String(l.lat).replace('.',','),String(l.lng).replace('.',',')];
   });
   const csv = '\ufeff' + [cab, ...linhas].map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const a = document.createElement('a');
