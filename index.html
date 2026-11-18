@@ -504,8 +504,19 @@ const hoje = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTi
 const br = iso => iso ? iso.split('-').reverse().join('/') : '';
 /* ---------- VISITAS: várias por loja. Status da loja = última visita ---------- */
 const refData = v => (v.status === 'visitada' ? v.dataVisita : v.dataAgendada) || '';
-/* responsável pela visita: nomes já usados viram sugestão no campo */
-const respsConhecidos = () => [...new Set(Object.values(lojas).flatMap(l => (l._vis || []).map(v => String(v.resp || '').trim())).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+/* responsável pela visita: vem do e-mail de quem agendou (campo "por"), pode ser trocado */
+const NOMES_EMAIL = [['marcelo','Marcelo'], ['icaro','Icaro'], ['ícaro','Icaro']];
+function nomeDoEmail(email){
+  const local = String(email || '').split('@')[0].toLowerCase().trim();
+  if (!local) return '';
+  const fixo = NOMES_EMAIL.find(([pre]) => local.startsWith(pre));
+  if (fixo) return fixo[1];
+  const prim = local.split(/[._\-\d]+/).filter(Boolean)[0] || local;
+  return prim.charAt(0).toUpperCase() + prim.slice(1);
+}
+const meuNome = () => nomeDoEmail(usuario && usuario.email);
+const respDe = v => String((v && (v.resp || nomeDoEmail(v.por))) || '').trim();
+const respsConhecidos = () => [...new Set(Object.values(lojas).flatMap(l => (l._vis || []).map(respDe)).concat(NOMES_EMAIL.map(x => x[1])).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 const dlResp = () => `<datalist id="dlResp">${respsConhecidos().map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
 function visitasLegado(l){ /* formato antigo: 1 visita + 2ª agenda */
   const out = [];
@@ -930,7 +941,7 @@ async function agendarRoteiro(id){
   catch(e){ toast('Não salvou: ' + (e.code || e.message)); }
 }
 /* responsável da próxima visita agendada; se não houver, da última feita */
-function respDaLoja(l){ const p = proxAgenda(l); const vs = l._vis || []; const f = vs.filter(v => v.status === 'visitada').pop(); return ((p && p.resp) || (f && f.resp) || '').trim(); }
+function respDaLoja(l){ const p = proxAgenda(l); const vs = l._vis || []; const f = vs.filter(v => v.status === 'visitada').pop(); return (p ? respDe(p) : '') || (f ? respDe(f) : ''); }
 function renderRoteiros(){
   const box = $('painelRot');
   if (!rotSel) {
@@ -954,7 +965,7 @@ function renderRoteiros(){
       <h3>${esc(r.nome)}</h3>
       <p>${num(s.v)} de ${num(s.n)} lojas visitadas · ${esc(r.grupo)}</p>
       <div class="rot-acoes">
-        ${editor ? `<input type="date" id="rData" value="${s.proxData || ''}" aria-label="Data do roteiro"><input id="rResp" list="dlResp" placeholder="Responsável pela visita" aria-label="Responsável pela visita" autocomplete="off">${dlResp()}<button class="btn prim" id="rAgendar">Agendar roteiro</button>` : ''}
+        ${editor ? `<input type="date" id="rData" value="${s.proxData || ''}" aria-label="Data do roteiro"><input id="rResp" list="dlResp" value="${esc(meuNome())}" placeholder="Responsável pela visita" aria-label="Responsável pela visita" autocomplete="off">${dlResp()}<button class="btn prim" id="rAgendar">Agendar roteiro</button>` : ''}
         <a class="btn claro" href="${rotaGoogle(rotSel)}" target="_blank" rel="noopener">Abrir rota no Google Maps</a>
       </div>
       ${editor ? '<p class="dica">Agendar aplica a data em todas as lojas do roteiro que ainda não foram visitadas. Se todas já foram, cria uma nova rodada.</p>' : ''}
@@ -1108,6 +1119,28 @@ function pendTxt(l){
   return `<small class="pend" style="color:${cor}">${u.status === 'vermelho' ? 'Pendência crítica' : 'Pendência'}${u.prazo ? (venc ? ' · prazo vencido ' : ' · prazo ') + br(u.prazo) : ''}</small>`;
 }
 /* ---------- RENDER ---------- */
+/* card por responsável: visitas feitas, % do total feito, lojas diferentes e agendadas em aberto */
+function cardsResponsaveis(todas){
+  const por = {};
+  todas.forEach(l => (l._vis || []).forEach(v => {
+    const n = respDe(v) || 'Não informado';
+    const o = por[n] || (por[n] = {feitas:0, lojas:new Set(), agendadas:0});
+    if (v.status === 'visitada') { o.feitas++; o.lojas.add(l.num); } else o.agendadas++;
+  }));
+  const total = Object.values(por).reduce((a, o) => a + o.feitas, 0);
+  return Object.entries(por)
+    .filter(([n, o]) => o.feitas || o.agendadas)
+    .sort((a, b) => (a[0] === 'Não informado') - (b[0] === 'Não informado') || b[1].feitas - a[1].feitas)
+    .map(([n, o]) => {
+      const pc = total ? Math.round(o.feitas / total * 100) : 0;
+      return `<div class="kpi" style="--cor:${n === 'Não informado' ? '#8A948C' : 'var(--verde)'};cursor:default">
+        <b>${num(o.feitas)} <small style="font-size:16px;color:var(--tinta2)">${pc}%</small></b>
+        <span>${esc(n)}: ${o.feitas === 1 ? 'visita feita' : 'visitas feitas'}</span>
+        <div class="barra"><i style="width:${pc}%"></i></div>
+        <span style="font-size:12px;font-weight:600">${num(o.lojas.size)} ${o.lojas.size === 1 ? 'loja' : 'lojas'} · ${num(o.agendadas)} ${o.agendadas === 1 ? 'agendada' : 'agendadas'}</span>
+      </div>`;
+    }).join('');
+}
 function render(){
   const todas = Object.values(lojas), t = todas.length;
   const c = {visitada:0, agendada:0, vencida:0, pendente:0};
@@ -1146,7 +1179,8 @@ function render(){
     ['pendente', 'Sem data', c.pendente, '#8A948C'],
   ];
   $('kpis').innerHTML = k.map(([s,r,v,cor]) => `<button class="kpi ${kpiAtivo===s?'ativo':''}" data-s="${s}" style="--cor:${cor}"><b>${num(v)}</b><span>${r}</span></button>`).join('')
-    + `<div class="kpi" style="--cor:#0F4D1A;cursor:default"><b>${pct}%</b><span>Já visitadas (${num(cob)} de ${num(t)})</span><div class="barra"><i style="width:${pct}%"></i></div></div>`;
+    + `<div class="kpi" style="--cor:#0F4D1A;cursor:default"><b>${pct}%</b><span>Já visitadas (${num(cob)} de ${num(t)})</span><div class="barra"><i style="width:${pct}%"></i></div></div>`
+    + cardsResponsaveis(todas);
 
   // cidades
   const cidades = [...new Set(todas.map(l => l.cidade))].sort((a,b) => a.localeCompare(b,'pt-BR'));
@@ -1208,7 +1242,7 @@ function desenharSelos(k){
   const n = nVis(l), p = proxAgenda(l), venc = p && p.dataAgendada < hoje();
   box.innerHTML = `<span class="selo ${n ? '' : 'zero'}"><b>${num(n)}</b>${n === 1 ? 'visita feita' : 'visitas feitas'}</span>`
     + (l.dataVisita ? `<span class="selo txt">Última ${br(l.dataVisita)}</span>` : '')
-    + (p ? `<span class="selo txt ${venc ? 'venc' : 'prox'}">${venc ? 'Vencida' : 'Próxima'} ${br(p.dataAgendada)}${p.resp ? ' · ' + esc(p.resp) : ''}</span>` : '');
+    + (p ? `<span class="selo txt ${venc ? 'venc' : 'prox'}">${venc ? 'Vencida' : 'Próxima'} ${br(p.dataAgendada)}${respDe(p) ? ' · ' + esc(respDe(p)) : ''}</span>` : '');
 }
 function cardVisita(v){
   const st = v.status === 'agendada' && v.dataAgendada < hoje() ? 'vencida' : v.status;
@@ -1218,7 +1252,7 @@ function cardVisita(v){
   return `<div class="vis" style="--c:${COR[st]}">
     <div class="vis-cab"><strong>${v.n}ª visita</strong><span class="tag" style="--c:${COR[st]}">${ROTULO[st]}</span></div>
     <div class="vis-datas">${datas}</div>
-    <div class="vis-resp">Responsável: ${v.resp ? `<b>${esc(v.resp)}</b>` : '<span style="color:var(--tinta2)">não informado</span>'}</div>
+    <div class="vis-resp">Responsável: ${respDe(v) ? `<b>${esc(respDe(v))}</b>` : '<span style="color:var(--tinta2)">não informado</span>'}</div>
     ${v.obs ? `<p class="vis-obs">${esc(v.obs)}</p>` : ''}
     <div class="rel-lista" data-rels="${v.id}"></div>
     ${editor ? `<div class="vis-bts">
@@ -1282,7 +1316,7 @@ function desenharForm(k){
   if ($('gSalvar')) $('gSalvar').onclick = () => salvarVisita(k);
   if ($('gCancelar')) $('gCancelar').onclick = () => { editVis = null; desenharForm(k); };
   if ($('gNova')) $('gNova').onclick = () => {
-    editVis = {k, id:null, status:'agendada', dataAgendada:'', dataVisita:'', obs:'', resp:''};
+    editVis = {k, id:null, status:'agendada', dataAgendada:'', dataVisita:'', obs:'', resp:meuNome()};
     desenharForm(k); $('gCorpo').scrollTop = 0; if ($('vAg')) $('vAg').focus();
   };
   if ($('gExcluir')) $('gExcluir').onclick = () => excluirLoja(k);
@@ -1304,7 +1338,7 @@ function iniciarEdicao(k, id, feita){
   guardarCampos();
   const v = (lojas[k]._vis || []).find(x => x.id === id); if (!v) return;
   const sugestao = v.dataAgendada && v.dataAgendada <= hoje() ? v.dataAgendada : hoje();
-  editVis = {k, id, status: feita ? 'visitada' : v.status, dataAgendada: v.dataAgendada || '', dataVisita: v.dataVisita || (feita ? sugestao : ''), obs: v.obs || '', resp: v.resp || ''};
+  editVis = {k, id, status: feita ? 'visitada' : v.status, dataAgendada: v.dataAgendada || '', dataVisita: v.dataVisita || (feita ? sugestao : ''), obs: v.obs || '', resp: respDe(v) || meuNome()};
   desenharForm(k);
 }
 /* monta a gravação da loja inteira: lista de visitas + resumo (status = última visita) */
@@ -1681,9 +1715,9 @@ $('btnCsv').onclick = () => {
   const cab = ['Nº loja','Loja','Roteiro','Cidade','Código','CNPJ','Endereço','Status (última visita)','Data agendada','Última visita feita','Visitas feitas','Próxima agenda','Responsável próxima agenda','Histórico de visitas','Observações','Latitude','Longitude'];
   const linhas = ordenar(Object.entries(lojas)).map(([k,l]) => {
     const vs = l._vis || [], p = proxAgenda(l);
-    const histV = vs.map(v => `${v.n}ª ${v.status === 'visitada' ? 'feita ' + br(v.dataVisita) : 'agendada ' + br(v.dataAgendada)}${v.resp ? ' (' + v.resp + ')' : ''}`).join('; ');
+    const histV = vs.map(v => `${v.n}ª ${v.status === 'visitada' ? 'feita ' + br(v.dataVisita) : 'agendada ' + br(v.dataAgendada)}${respDe(v) ? ' (' + respDe(v) + ')' : ''}`).join('; ');
     const obsV = vs.filter(v => v.obs).map(v => `${v.n}ª: ${v.obs}`).join(' | ') || l.obs || '';
-    return [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),nVis(l),p ? br(p.dataAgendada) : '',p ? (p.resp || '') : '',histV,obsV,String(l.lat).replace('.',','),String(l.lng).replace('.',',')];
+    return [l.num,l.nome,(ROT_ID[rotDe(l)]||{}).nome||'',l.cidade,l.codigo,l.cnpj,l.endereco,ROTULO[statusEf(l)],br(l.dataAgendada),br(l.dataVisita),nVis(l),p ? br(p.dataAgendada) : '',p ? respDe(p) : '',histV,obsV,String(l.lat).replace('.',','),String(l.lng).replace('.',',')];
   });
   const csv = '\ufeff' + [cab, ...linhas].map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(';')).join('\r\n');
   const a = document.createElement('a');
